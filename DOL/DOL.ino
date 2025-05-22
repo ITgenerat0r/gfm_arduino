@@ -21,7 +21,7 @@
 #define dir_pin 19
 #define ena_pin 18
 
-#define MIN_ICED 135
+#define MIN_ICED 190 // 150 is working, but there is DOPM (need 180), lower for DOL100
 #define MAX_ICED 1300
 
 
@@ -232,31 +232,52 @@ void fly(bool direction, int32_t duration, void (*spin)(int, int)){
 }
 
 
-
+bool debug_log = false;
 
 int32_t ss = 100;
 void loop() {
   // put your main code here, to run repeatedly:
 
   if (Serial.available()){ 
-    Serial.println(ss);
+    if (debug_log){
+      Serial.println(ss);
+    }
       // ss = Serial.readString().toInt();
     int32_t st = Serial.parseInt();
     if (st > 0){
+      // Serial.println(ss);
       ss = 100 * st;
       
       // ss = 100 * Serial.parseInt();
         // uint32_t xx = 0-1;
-      Serial.print("--------------------- \nSet steps: "); Serial.println(ss);
+      if (debug_log){
+        Serial.print("--------------------- \nSet steps: "); Serial.println(ss);
+      }
+      
         
     // runner(1200, ss, spin); 
       fly(dir, ss, spin);
+      if (debug_log){
+        Serial.println("-----------------");
+      }
+      if(!debug_log){
+        Serial.print(ss);
+      }
       
-      Serial.println("-----------------");
     } else {
-      dir = !dir;
-      Serial.print("dir: ");
-      Serial.println(dir);
+      if (st == 0){
+        dir = !dir;
+        if (debug_log){
+          Serial.print("dir: ");
+        }
+        Serial.print(dir);
+        if (debug_log){
+          Serial.println(".");
+        }
+      } else {
+        Serial.print("DOL");
+      }
+      
     }
   }
 
