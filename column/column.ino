@@ -1,7 +1,7 @@
 
 // digital
-#define valve_1_pin 2
-#define valve_2_pin 3
+#define valve_1_pin 4
+#define valve_2_pin 7
 #define green_led_pin 5
 #define gear_pin 6
 #define red_led_pin 8
@@ -258,7 +258,17 @@ void setup() {
   pinMode(green_led_pin, OUTPUT);
   pinMode(button_pin, INPUT);
 
-
+  u8g2.begin();
+  
+  char buffer[12] = "Starting...";
+//  itoa(x, buffer, 10);
+  u8g2.clearBuffer();
+  // u8g2.setDisplayRotation(U8G2_R2);
+  // u8g2.setFont(u8g2_font_ncenB08_tr);
+//  u8g2.setFont(u8g2_font_fub42_tr);
+  u8g2.setFont(u8g2_font_4x6_t_cyrillic);
+  u8g2.drawStr(5, 50, buffer);
+  u8g2.sendBuffer();
 
 
   digitalWrite(green_led_pin, HIGH);
@@ -276,7 +286,18 @@ void setup() {
   digitalWrite(green_led_pin, LOW);
   digitalWrite(red_led_pin, LOW);
 
-  u8g2.begin();
+
+  char buf = " Done! ";
+//  itoa(x, buffer, 10);
+  u8g2.clearBuffer();
+  // u8g2.setDisplayRotation(U8G2_R2);
+  // u8g2.setFont(u8g2_font_ncenB08_tr);
+//  u8g2.setFont(u8g2_font_fub42_tr);
+  u8g2.setFont(u8g2_font_4x6_t_cyrillic);
+  u8g2.drawStr(5, 50, buf);
+  u8g2.sendBuffer();
+//  
+//  u8g2.clearBuffer();
 
   Serial.println("Done!");
 }
