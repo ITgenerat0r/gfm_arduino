@@ -6,6 +6,8 @@
 #define gear_pin 6
 #define red_led_pin 8
 #define button_pin 9
+#define btn_up_pin 3
+#define btn_down_pin 2
 
 // analog
 #define flowrate_pin 0
@@ -14,6 +16,7 @@
 
 #include <Arduino.h>
 #include <U8g2lib.h>
+#include <EEPROM.h>
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -44,7 +47,6 @@
 #define max_rate 150
 #define pre_min_rate 300
 #define pre_max_rate 400
-#define FLOW_PRESSURE 60
 
 // for blink_led
 #define led_on_delay 100
@@ -63,6 +65,10 @@ U8G2_SSD1309_128X64_NONAME2_F_4W_SW_SPI u8g2(U8G2_R2, /* clock=*/ clk, /* data=*
 
 
 bool logs = false;
+
+bool is_testing = false;
+
+byte flow_pressure = 60;
 
 byte leds_state = 0;
 
@@ -129,7 +135,7 @@ float flow(const bool toward){
   }else{
     flow_backward();
   }
-  set_flow_pressure(FLOW_PRESSURE);
+  set_flow_pressure(flow_pressure);
   delay(100);
 
   int precise = 1; // in percent
@@ -142,6 +148,10 @@ float flow(const bool toward){
     Serial.print("sm3/m)");
     Serial.println();
     lcd_write(current_flowrate);
+    char buffer[10] = "Flowrate:";
+    u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+    u8g2.drawStr(10, 10, buffer);
+    u8g2.sendBuffer();
     if (is_equal(current_flowrate, flowrate, precise)){
       if(!--stable){
         Serial.print("stable when n = ");
@@ -150,6 +160,10 @@ float flow(const bool toward){
       }
     }
     flowrate = current_flowrate;
+    read_buttons();
+    if(is_testing == false){
+      break;
+    }
     delay(100);
   }
   set_flow_pressure(0);
@@ -161,6 +175,7 @@ float flow(const bool toward){
 
 byte testing(){
   Serial.println("Testing is started...");
+  is_testing = true;
   flow_close();
   enable(red_led_pin, false);
   enable(green_led_pin, false);
@@ -186,6 +201,9 @@ byte testing(){
     }
     toward = !toward;
     last_flowrate = current_flowrate;
+    if (is_testing == false){
+      break;
+    }
   }
   if (current_flowrate > pre_max_rate){
     result = 4;
@@ -235,8 +253,69 @@ void lcd_write(int x){
   // u8g2.setDisplayRotation(U8G2_R2);
   // u8g2.setFont(u8g2_font_ncenB08_tr);
   u8g2.setFont(u8g2_font_fub42_tr);
-  u8g2.drawStr(5, 50, buffer);
+  u8g2.drawStr(10, 60, buffer);
   u8g2.sendBuffer();
+}
+
+
+void save_pressure(){
+  EEPROM.write(0, flow_pressure);
+  // EEPROM.commit();
+}
+
+bool is_flow_pressure_changed = false;
+
+void set_new_flow_pressure(int value){
+  if (value < 0){
+    value = 0;
+  } else if (value > 255){
+    value = 255;
+  }
+  flow_pressure = value;
+  is_flow_pressure_changed = true;
+
+  lcd_write(flow_pressure);
+  char buffer[10] = "Pressure:";
+  u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+  u8g2.drawStr(10, 10, buffer);
+  u8g2.sendBuffer();
+
+}
+
+unsigned long int last_time_pressed = 0;
+bool is_skip = false;
+void read_buttons(){
+  
+  bool btn_state = !digitalRead(button_pin);
+  bool btn_up_state = !digitalRead(btn_up_pin);
+  bool btn_down_state = !digitalRead(btn_down_pin);
+  if(btn_state | btn_up_state | btn_down_state == true){
+    unsigned long int current_time = millis();
+    if(current_time - last_time_pressed < 10){
+      return;
+    }
+    if(current_time - last_time_pressed < 200 && is_skip == true){
+      return;
+    }
+    if(current_time - last_time_pressed > 150 && current_time - last_time_pressed < 500){
+      return;
+    }
+    is_skip = true;
+    is_testing = false;
+    if (btn_up_state == true){
+      set_new_flow_pressure(flow_pressure + 1);
+    }
+    if (btn_down_state == true){
+      set_new_flow_pressure(flow_pressure - 1);
+    }
+  } else {
+    last_time_pressed = millis();
+    is_skip = false;
+    if (is_flow_pressure_changed == true){
+      is_flow_pressure_changed = false;
+      save_pressure();
+    }
+  }
 }
 
 
@@ -246,6 +325,13 @@ void setup() {
   Serial.begin(115200);
   Serial.setTimeout(1);
   Serial.print("Starting...      ");
+
+  EEPROM.begin();
+  int data = 0;
+  data = EEPROM.read(0);
+  if(data >= 0 && data <= 255){
+    flow_pressure = data;
+  }
 
   analogReference(INTERNAL);
 
@@ -257,6 +343,8 @@ void setup() {
   pinMode(red_led_pin, OUTPUT);
   pinMode(green_led_pin, OUTPUT);
   pinMode(button_pin, INPUT);
+  pinMode(btn_up_pin, INPUT);
+  pinMode(btn_down_pin, INPUT);
 
   u8g2.begin();
   
@@ -266,8 +354,9 @@ void setup() {
   // u8g2.setDisplayRotation(U8G2_R2);
   // u8g2.setFont(u8g2_font_ncenB08_tr);
 //  u8g2.setFont(u8g2_font_fub42_tr);
-  u8g2.setFont(u8g2_font_4x6_t_cyrillic);
-  u8g2.drawStr(5, 50, buffer);
+  // u8g2.setFont(u8g2_font_4x6_t_cyrillic);
+  u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+  u8g2.drawStr(20, 20, buffer);
   u8g2.sendBuffer();
 
 
@@ -287,14 +376,14 @@ void setup() {
   digitalWrite(red_led_pin, LOW);
 
 
-  char buf = " Done! ";
+  char buf[6] = "Done!";
 //  itoa(x, buffer, 10);
   u8g2.clearBuffer();
   // u8g2.setDisplayRotation(U8G2_R2);
   // u8g2.setFont(u8g2_font_ncenB08_tr);
 //  u8g2.setFont(u8g2_font_fub42_tr);
-  u8g2.setFont(u8g2_font_4x6_t_cyrillic);
-  u8g2.drawStr(5, 50, buf);
+  u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+  u8g2.drawStr(20, 20, buf);
   u8g2.sendBuffer();
 //  
 //  u8g2.clearBuffer();
@@ -341,7 +430,6 @@ void loop() {
     lcd_write(ss);
   }
 
-
   bool btn_state = !digitalRead(button_pin);
   // Serial.println(btn_state);
   if(btn_state==true){
@@ -369,4 +457,5 @@ void loop() {
     enable(red_led_pin, true);
     blink_led(green_led_pin, leds_state - 1);
   }
+  read_buttons();
 }
