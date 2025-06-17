@@ -129,7 +129,7 @@ void transfer_3wire(unsigned int data){
 void loop() {
   if (Serial.available()){ 
     x = Serial.readString().toInt();
-    if(x < 0){
+    if(x == 0xffffffff){
       Serial.print("PAS");
     } else {
       Serial.print(x, HEX);
