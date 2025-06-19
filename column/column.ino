@@ -69,6 +69,7 @@ bool logs = false;
 bool is_testing = false;
 
 byte flow_pressure = 60;
+int flow_rate = 60;
 
 byte leds_state = 0;
 
@@ -282,6 +283,30 @@ void set_new_flow_pressure(int value){
 
 }
 
+void save_rate(){
+  EEPROM.write(0, flow_rate);
+  // EEPROM.commit();
+}
+
+bool is_flow_rate_changed = false;
+
+void set_new_flow_rate(int value){
+  if (value < 0){
+    value = 0;
+  } else if (value > 255){
+    value = 255;
+  }
+  flow_rate = value;
+  is_flow_rate_changed = true;
+
+  lcd_write(flow_rate);
+  char buffer[10] = "Pressure:";
+  u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+  u8g2.drawStr(10, 10, buffer);
+  u8g2.sendBuffer();
+
+}
+
 unsigned long int last_time_pressed = 0;
 bool is_skip = false;
 void read_buttons(){
@@ -303,17 +328,17 @@ void read_buttons(){
     is_skip = true;
     is_testing = false;
     if (btn_up_state == true){
-      set_new_flow_pressure(flow_pressure + 1);
+      set_new_flow_rate(flow_rate + 10);
     }
     if (btn_down_state == true){
-      set_new_flow_pressure(flow_pressure - 1);
+      set_new_flow_rate(flow_rate - 10);
     }
   } else {
     last_time_pressed = millis();
     is_skip = false;
-    if (is_flow_pressure_changed == true){
-      is_flow_pressure_changed = false;
-      save_pressure();
+    if (is_flow_rate_changed == true){
+      is_flow_rate_changed = false;
+      save_rate();
     }
   }
 }
@@ -329,6 +354,7 @@ void setup() {
   EEPROM.begin();
   int data = 0;
   data = EEPROM.read(0);
+  flow_rate = EEPROM.read(1);
   if(data >= 0 && data <= 255){
     flow_pressure = data;
   }
