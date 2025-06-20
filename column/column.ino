@@ -353,7 +353,7 @@ void read_buttons(){
   }
 }
 
-#define rate_precision 1
+#define rate_precision 5
 #define flow_duration 10000//10000
 #define good_count 20//20
 // #define 
