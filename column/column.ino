@@ -21,9 +21,9 @@
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
-#ifdef U8X8_HAVE_HW_I2C
-#include <Wire.h>
-#endif
+// #ifdef U8X8_HAVE_HW_I2C
+// #include <Wire.h>
+// #endif
 
 
 // mini pro
@@ -258,13 +258,13 @@ void lcd_write(int x){
   u8g2.sendBuffer();
 }
 
-void lcd_write3row(char buf1[24], char buf2[24], char buf3[24]){
+void lcd_write3row(char buf1[24], char buf2[24]){
   // char buffer[10] = "Pressure:";
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_5x8_t_cyrillic);
-  u8g2.drawStr(10, 10, buf1);
-  u8g2.drawStr(10, 20, buf2);
-  u8g2.drawStr(10, 30, buf3);
+  u8g2.drawStr(5, 15, buf1);
+  u8g2.drawStr(5, 30, buf2);
+  // u8g2.drawStr(5, 30, buf3);
   u8g2.sendBuffer();
 }
 
@@ -353,20 +353,20 @@ void read_buttons(){
   }
 }
 
-
-void static_test(){}
-
 #define rate_precision 1
+#define flow_duration 10000//10000
+#define good_count 20//20
 // #define 
 
-byte start_pressure = 10;
-byte finish_pressure = 0;
+// byte start_pressure = 10;
+// byte finish_pressure = 0;
 byte loops_counter = 0;
 bool flow_toward = false;
 void dynamic_test(){
   flow_close();
-  flow_pressure = start_pressure;
-  float last_rate = 0;
+  flow_pressure = 10;
+  is_testing = true;
+  byte err_counter = 0;
   while (is_testing){
     // flow_toward = !flow_toward;
     // if(flow_toward){
@@ -380,35 +380,49 @@ void dynamic_test(){
         loops_counter++;
       } else {
         loops_counter = 0;
-        if (rate > flow_rate){
-          flow_pressure--;
+
+        float k = flow_rate / rate;
+        if (abs(k-1) > 0.2){
+          flow_pressure *= 0.89*k;
         } else {
-          flow_pressure++;
+          if (rate > flow_rate){
+            flow_pressure--;
+          } else {
+            flow_pressure++;
+          }
         }
-        if (rate > 0){
-          float k = flow_rate / rate;
-          // flow_pressure *= k;
+        
+      
+        // flow_pressure *= k;
+        Serial.print("K = ");
+        Serial.println(k);
+        // char b1[24] = "k (scale):             ";
+        // char b2[24];
+        // dtostrf(k, 6, 2, b2);
+        // char b3[24] = "Wait...                ";
 
-          char b1[24] = "k (scale):             ";
-          char b2[24];
-          dtostrf(k, 6, 2, b2);
-          char b3[24] = "Wait...                ";
-
-          lcd_write3row(b1, b2, b3);
-        }
+        // lcd_write3row(b1, b2, b3);
+        // delay(2000);
+        
         
       }
     } else {
-      loops_counter++;
+      err_counter++;
       flow_pressure++;
     }
-    if(loops_counter >= 20){
+    if(loops_counter >= good_count){
       set_new_flow_pressure(flow_pressure);
+      is_testing = false;
       break;
     }
+    // if (err_counter >= good_count){
+    //   break;
+    // }
 
   }
-
+  loops_counter = 0;
+  err_counter = 0;
+  set_flow_pressure(0);
   flow_close();
 }
 
@@ -416,9 +430,9 @@ void dynamic_test(){
 float step(byte p){
   set_flow_pressure(p);
   flow_forward();
-  wait(10000);
+  wait(flow_duration);
   flow_backward();
-  wait(10000);
+  wait(flow_duration);
   return get_flowrate();
 }
 
@@ -427,11 +441,23 @@ void wait(int d){
   last_switch_millis = millis();
   while(true){
     read_buttons();
+    if(is_testing == false){
+      break;
+    }
     lcd_write(get_flowrate());
     // output flowrate, counter
+    // char b1[24];
+    // dtostrf(get_flowrate(), 24, 0, b1);
+    // b1[0] = 'F'; b1[1] = 'l'; b1[2] = 'o'; b1[3] = 'w'; b1[4] = 'r'; b1[5] = 'a'; b1[6] = 't'; b1[7] = 'e'; b1[8] = ':';
+    // char b2[24];
+    // dtostrf(loops_counter, 24, 0, b2);
+    // b2[0] = 'C'; b2[1] = 'o'; b2[2] = 'u'; b2[3] = 'n'; b2[4] = 't'; b2[5] = 'e'; b2[6] = 'r'; b2[7] = ':';
+    // char b3[24] = "Wait...                ";
+
+    // lcd_write3row(b2, b1);
     unsigned long int current_millis = millis();
     if(current_millis - last_switch_millis > d){
-      return;
+      break;
     }
   }
   
@@ -509,6 +535,15 @@ void setup() {
 //  u8g2.clearBuffer();
 
   Serial.println("Done!");
+
+  // char b1[24] = "Flowrate:............./";
+  // dtostrf(get_flowrate(), 24, 0, b1);
+  // b1[0] = 'F';
+  // char b2[24] = "Counter:              /";
+  // // dtostrf(loops_counter, 6, 0, b2);
+  // char b3[24] = "Wait...               /";
+
+  // lcd_write3row(b1, b2, b3);
 }
 
 void loop() {
