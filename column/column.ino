@@ -390,7 +390,8 @@ void dynamic_test(){
           // flow_pressure *= k;
 
           char b1[24] = "k (scale):             ";
-          char b2[24] = "                       ";
+          char b2[24];
+          dtostrf(k, 6, 2, b2);
           char b3[24] = "Wait...                ";
 
           lcd_write3row(b1, b2, b3);
