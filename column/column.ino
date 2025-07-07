@@ -8,6 +8,7 @@
 #define button_pin 9
 #define btn_up_pin 3
 #define btn_down_pin 2
+#define btn_mode_pin 14
 
 // analog
 #define flowrate_pin 0
@@ -57,6 +58,12 @@
 #define RATE_VOLTAGE_OFFSET 1
 
 
+#define rate_precision 5
+#define flow_duration 10000//10000
+#define good_count 20//20
+// #define 
+
+
 // U8G2_SSD1309_128X64_NONAME0_1_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 3, /* data=*/ 2, /* cs=*/ 4, /* dc=*/ 16, /* reset=*/ 9);    
 
 // U8G2_SSD1309_128X64_NONAME2_1_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 3, /* data=*/ 2, /* cs=*/ 4, /* dc=*/ 16, /* reset=*/ 9);  
@@ -68,10 +75,45 @@ bool logs = false;
 
 bool is_testing = false;
 
+
+// blink_led()
+byte leds_state = 0;
+unsigned long int last_millis = 0;
+int current_delay = 0;
+bool state = false;
+byte blink_counter = 0;
+
+
+// set_new_flow_pressure()
+bool is_flow_pressure_changed = false;
 byte flow_pressure = 60;
+
+// set_new_flow_rate()
+bool is_flow_rate_changed = false;
 int flow_rate = 60;
 
-byte leds_state = 0;
+
+// read_buttons()
+unsigned long int last_time_pressed = 0;
+bool is_skip = false;
+
+
+// dynamic_test()
+// byte start_pressure = 10;
+// byte finish_pressure = 0;
+byte loops_counter = 0;
+bool flow_toward = false;
+
+
+// wait()
+unsigned long int last_switch_millis = 0;
+
+
+
+
+
+
+
 
 
 float PFMV505_flow(const float voltage, const float offset){
@@ -219,10 +261,7 @@ bool is_equal(float a, float b, const byte precise){
 // }
 
 
-unsigned long int last_millis = 0;
-int current_delay = 0;
-bool state = false;
-byte blink_counter = 0;
+
 
 void blink_led(const byte pin, const byte count){
   unsigned long  int current_millis = millis();
@@ -274,7 +313,11 @@ void save_pressure(){
   // EEPROM.commit();
 }
 
-bool is_flow_pressure_changed = false;
+void save_rate(){
+  EEPROM.write(1, flow_rate);
+  // EEPROM.commit();
+}
+
 
 void set_new_flow_pressure(int value){
   if (value < 0){
@@ -293,13 +336,6 @@ void set_new_flow_pressure(int value){
 
 }
 
-void save_rate(){
-  EEPROM.write(1, flow_rate);
-  // EEPROM.commit();
-}
-
-bool is_flow_rate_changed = false;
-
 void set_new_flow_rate(int value){
   if (value < 50){
     value = 50;
@@ -317,13 +353,13 @@ void set_new_flow_rate(int value){
 
 }
 
-unsigned long int last_time_pressed = 0;
-bool is_skip = false;
+
 void read_buttons(){
   
   bool btn_state = !digitalRead(button_pin);
   bool btn_up_state = !digitalRead(btn_up_pin);
   bool btn_down_state = !digitalRead(btn_down_pin);
+  bool btn_mode_state = !digitalRead(btn_mode_pin);
   if(btn_state | btn_up_state | btn_down_state == true){
     unsigned long int current_time = millis();
     if(current_time - last_time_pressed < 10){
@@ -353,15 +389,9 @@ void read_buttons(){
   }
 }
 
-#define rate_precision 5
-#define flow_duration 10000//10000
-#define good_count 20//20
-// #define 
 
-// byte start_pressure = 10;
-// byte finish_pressure = 0;
-byte loops_counter = 0;
-bool flow_toward = false;
+
+
 void dynamic_test(){
   flow_close();
   flow_pressure = 10;
@@ -436,7 +466,7 @@ float step(byte p){
   return get_flowrate();
 }
 
-unsigned long int last_switch_millis = 0;
+
 void wait(int d){
   last_switch_millis = millis();
   while(true){
