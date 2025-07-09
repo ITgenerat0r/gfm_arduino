@@ -1,3 +1,12 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <EEPROM.h>
+
+#ifdef U8X8_HAVE_HW_SPI
+#include <SPI.h>
+#endif
+
+
 
 // digital
 #define valve_1_pin 4
@@ -8,20 +17,14 @@
 #define button_pin 9
 #define btn_up_pin 3
 #define btn_down_pin 2
-#define btn_mode_pin 14
+#define btn_mode_pin 15
 
 // analog
 #define flowrate_pin 0
 // #define pressure_pin 1
 
 
-#include <Arduino.h>
-#include <U8g2lib.h>
-#include <EEPROM.h>
 
-#ifdef U8X8_HAVE_HW_SPI
-#include <SPI.h>
-#endif
 // #ifdef U8X8_HAVE_HW_I2C
 // #include <Wire.h>
 // #endif
@@ -307,6 +310,16 @@ void lcd_write3row(char buf1[24], char buf2[24]){
   u8g2.sendBuffer();
 }
 
+void lcd_show(char buf1[24], char buf2[24]){
+  // char buffer[10] = "Pressure:";
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+  u8g2.drawStr(5, 15, buf1);
+  u8g2.drawStr(5, 30, buf2);
+  // u8g2.drawStr(5, 30, buf3);
+  u8g2.sendBuffer();
+}
+
 
 void save_pressure(){
   EEPROM.write(0, flow_pressure);
@@ -360,7 +373,7 @@ void read_buttons(){
   bool btn_up_state = !digitalRead(btn_up_pin);
   bool btn_down_state = !digitalRead(btn_down_pin);
   bool btn_mode_state = !digitalRead(btn_mode_pin);
-  if(btn_state | btn_up_state | btn_down_state == true){
+  if(btn_state | btn_up_state | btn_down_state | btn_mode_state == true){
     unsigned long int current_time = millis();
     if(current_time - last_time_pressed < 10){
       return;
@@ -378,6 +391,13 @@ void read_buttons(){
     }
     if (btn_down_state == true){
       set_new_flow_rate(flow_rate - 10);
+    }
+    if (btn_mode_state == true){
+      char buffer[6] = "Mode:";
+      u8g2.clearBuffer();
+      u8g2.setFont(u8g2_font_5x8_t_cyrillic);
+      u8g2.drawStr(10, 10, buffer);
+      u8g2.sendBuffer();
     }
   } else {
     last_time_pressed = millis();
@@ -521,6 +541,7 @@ void setup() {
   pinMode(button_pin, INPUT);
   pinMode(btn_up_pin, INPUT);
   pinMode(btn_down_pin, INPUT);
+  pinMode(btn_mode_pin, INPUT);
 
   u8g2.begin();
   

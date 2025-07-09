@@ -1,40 +1,42 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
 
-#define op 11
-#define dl 2
+// Создание объекта дисплея (4-проводный Software SPI)
+U8G2_SSD1309_128X64_NONAME2_F_4W_SW_SPI u8g2(
+  /*  */ U8G2_R2,
+  /* clock=*/ 13,      // CLK / SCK
+  /* data=*/  11,      // MOSI / DATA
+  /* cs=*/    10,      // CS   (Chip Select)
+  /* dc=*/    17,       // DC   (Data/Command)
+  /* reset=*/ 16        // RST  (Reset)
+);
 
-unsigned int d;
+// Примеры переменных
+int var1 = 123;
+float var2 = 4.56;
+bool var3 = true;
 
-void setup() {
-  // put your setup code here, to run once:
-  d = 1000;
-  pinMode(op, OUTPUT);
-  pinMode(op, LOW);
-  
+void setup(void) {
+  u8g2.begin(); // Инициализация дисплея
+  Serial.begin(115200);
+  Serial.println("Done!");
 }
 
+void loop(void) {
+  char t[10] = String("test").c_str();
+  Serial.println(("test" + String(var1)).c_str());
+  u8g2.clearBuffer(); // Очистить буфер
 
-void sb(unsigned int n){
-  for(unsigned int i = 0; i < n; i++){
-    delay(dl);
-    digitalWrite(op, HIGH);
-    delay(dl*2);
-    digitalWrite(op, LOW);
-    delay(dl);
-  }
-}
+  // Нарисовать текст
+  u8g2.setFont(u8g2_font_ncenB08_tr); // Выбрать шрифт
 
-void loop() {
-  // put your main code here, to run repeatedly:
-//  digitalWrite(8, HIGH);
-//  delay(10);
-//  digitalWrite(8, LOW);
-//  delay(10);
-  if (Serial.available()){ 
-    d = Serial.readString().toInt();
-    Serial.print(d);
-    sb(d);
-    Serial.println(".");
-  }
- 
+  // u8g2.drawStr(1, 10, ("test" + String(var1)).c_str());
+  u8g2.drawStr(2, 10, ("Var1:   " + String(var1)).c_str());
+  u8g2.drawStr(2, 22, ("Var2:   " + String(var2, 2)).c_str());
+  u8g2.drawStr(2, 34, ("Var3:   " + String(var3 ? "ON" : "OFF")).c_str());
+  u8g2.drawStr(2, 46, ("Var4:   None"));
+  u8g2.drawStr(2, 58, ("Var5:   None"));
+  u8g2.sendBuffer(); // Отправить буфер на дисплей
 
+  delay(500); // Обновление раз в полсекунды
 }
