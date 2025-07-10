@@ -64,7 +64,7 @@ void OLEDHelper::drawPressure(const float val){
   char buffer[20];
   dtostrf(val, 1, 2, buffer);
   const char* baf = buffer;
-  snprintf(_buffer, _bufferSize, "Pressure %sMPa", baf);
+  snprintf(_buffer, _bufferSize, "Pressure %sAtm", baf);
   const char* cstr = _buffer;
   drawRow(3, cstr); 
 }
