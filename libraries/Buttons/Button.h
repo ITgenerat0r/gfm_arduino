@@ -17,7 +17,7 @@ class Button {
     int _pin;
 
     unsigned long _pressStartTime = 0;
-    const long _longPressThreshold = 1000; // Порог долгого нажатия в мс
+    const long _longPressThreshold = 500; // Порог долгого нажатия в мс
 
     int _lastState = HIGH;
     int _currentState;
