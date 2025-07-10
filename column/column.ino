@@ -104,8 +104,11 @@ float current_pressure = 0;
 
 // set_new_flow_rate()
 bool is_flow_rate_changed = false;
-int flow_rate = 60;
+int flow_rate_full = 60;
 int flow_rate_single = 70;
+
+float flow_rate_table[10] = { 0.0 };
+byte flow_pos = 0;
 float current_flowrate = 0;
 
 
@@ -170,16 +173,28 @@ void flow_backward(){
 
 void set_flow_pressure(const byte st){
   analogWrite(gear_pin, st);
-  current_pressure = st;
+  current_pressure = st*0.02;
 }
 
 
 float get_flowrate(){
-  float rate = 0.005 * RATE_VOLTAGE_CORRECTION * analogRead(flowrate_pin);
-  // Serial.print("Rate: ");
-  // Serial.print(rate);
-  // Serial.print("v,   ");
-  return PFMV505_flow(rate, RATE_VOLTAGE_OFFSET);
+  float u = 0.005 * RATE_VOLTAGE_CORRECTION * analogRead(flowrate_pin);
+  float rate = PFMV505_flow(u, RATE_VOLTAGE_OFFSET);
+  // flow_pos++;
+  // if (flow_pos > sizeof(flow_rate_table)-1){
+  //   flow_pos = 0;
+  // }
+  // flow_rate_table[flow_pos] = rate;
+  // float sum_flow = 0;
+  // for (byte i = 0; i < sizeof(flow_rate_table); i++){
+  //   sum_flow += flow_rate_table[i]/sizeof(flow_rate_table);
+  //   Serial.print("+=");
+  //   Serial.println(flow_rate_table[i]);
+  // }
+  current_flowrate = rate;
+  // Serial.print("Flowrate: ");
+  // Serial.println(current_flowrate);
+  return current_flowrate;
 }
 
 bool is_equal(float a, float b, const byte precise){
@@ -219,37 +234,13 @@ void blink_led(const byte pin, const byte count){
   
 }
 
-
-
-// void lcd_write(int x){
-//   char buffer[4];
-//   itoa(x, buffer, 10);
-//   u8g2.clearBuffer();
-//   // u8g2.setDisplayRotation(U8G2_R2);
-//   // u8g2.setFont(u8g2_font_ncenB08_tr);
-//   // u8g2.setFont(u8g2_font_fub42_tr);
-//   u8g2.drawStr(10, 60, buffer);
-//   u8g2.sendBuffer();
-// }
-
-// void lcd_write3row(char buf1[24], char buf2[24]){
-//   // char buffer[10] = "Pressure:";
-//   u8g2.clearBuffer();
-//   // u8g2.setFont(u8g2_font_5x8_t_cyrillic);
-//   u8g2.drawStr(5, 15, buf1);
-//   u8g2.drawStr(5, 30, buf2);
-//   // u8g2.drawStr(5, 30, buf3);
-//   u8g2.sendBuffer();
-// }
-
-
 void save_pressure(){
   EEPROM.write(0, flow_pressure);
   // EEPROM.commit();
 }
 
 void save_rate(){
-  EEPROM.write(1, flow_rate);
+  EEPROM.write(1, flow_rate_full);
   EEPROM.write(2, flow_rate_single);
   // EEPROM.commit();
 }
@@ -263,13 +254,6 @@ void set_new_flow_pressure(int value){
   }
   flow_pressure = value;
   is_flow_pressure_changed = true;
-
-  // lcd_write(flow_pressure);
-  // char buffer[10] = "Pressure:";
-  // u8g2.setFont(u8g2_font_5x8_t_cyrillic);
-  // u8g2.drawStr(10, 10, buffer);
-  // u8g2.sendBuffer();
-
 }
 
 void set_new_flow_rate(int value){
@@ -280,22 +264,15 @@ void set_new_flow_rate(int value){
   // }
   // flow_rate = value;
   if(md_full){
-    flow_rate += value;
-    if (flow_rate > 160) flow_rate = 160;
-    if (flow_rate < 0) flow_rate = 0;
+    flow_rate_full += value;
+    if (flow_rate_full > 160) flow_rate_full = 160;
+    if (flow_rate_full < 0) flow_rate_full = 0;
   } else {
     flow_rate_single += value;
     if (flow_rate_single > 160) flow_rate_single = 160;
     if (flow_rate_single < 50) flow_rate_single = 50;
   }
   is_flow_rate_changed = true;
-
-  // lcd_write(flow_rate);
-  // char buffer[10] = "Flowrate:";
-  // u8g2.setFont(u8g2_font_5x8_t_cyrillic);
-  // u8g2.drawStr(10, 10, buffer);
-  // u8g2.sendBuffer();
-
 }
 
 
@@ -327,7 +304,7 @@ void read_buttons(){
     if (btn_mode_state == true){
       md_full = !md_full;
       if(md_full){
-        oled.drawMode("Full", flow_rate);
+        oled.drawMode("Full", flow_rate_full);
       } else {
         oled.drawMode("Single", flow_rate_single);
       }
@@ -347,7 +324,7 @@ void read_buttons(){
 void update_monitor(){
   oled.clear();
   if(md_full){
-    oled.drawMode("Full", flow_rate);
+    oled.drawMode("Full", flow_rate_full);
   } else {
     oled.drawMode("Single", flow_rate_single);
   }
@@ -360,103 +337,157 @@ void update_monitor(){
 
 
 
-void dynamic_test(){
+// void dynamic_test(float flow_rate){
+  // flow_close();
+  // flow_pressure = 10;
+  // is_testing = true;
+  // byte err_counter = 0;
+  // while (is_testing){
+  //   // flow_toward = !flow_toward;
+  //   // if(flow_toward){
+  //   //   flow_forward();
+  //   // } else {
+  //   //   flow_backward();
+  //   // }
+  //   float rate = step(flow_pressure);
+  //   if(rate > 0){
+  //     if (is_equal(rate, flow_rate, rate_precision)){
+  //       loops_counter++;
+  //     } else {
+  //       loops_counter = 0;
+
+  //       float k = flow_rate / rate;
+  //       if (abs(k-1) > 0.2){
+  //         flow_pressure *= 0.89*k;
+  //       } else {
+  //         if (rate > flow_rate){
+  //           flow_pressure--;
+  //         } else {
+  //           flow_pressure++;
+  //         }
+  //       }
+        
+      
+  //       // flow_pressure *= k;
+  //       Serial.print("K = ");
+  //       Serial.println(k);
+  //       // char b1[24] = "k (scale):             ";
+  //       // char b2[24];
+  //       // dtostrf(k, 6, 2, b2);
+  //       // char b3[24] = "Wait...                ";
+
+  //       // lcd_write3row(b1, b2, b3);
+  //       // delay(2000);
+        
+        
+  //     }
+  //   } else {
+  //     err_counter++;
+  //     flow_pressure++;
+  //   }
+  //   if(loops_counter >= good_count){
+  //     set_new_flow_pressure(flow_pressure);
+  //     is_testing = false;
+  //     break;
+  //   }
+  //   // if (err_counter >= good_count){
+  //   //   break;
+  //   // }
+
+  // }
+  // loops_counter = 0;
+  // err_counter = 0;
+  // set_flow_pressure(0);
+  // flow_close();
+// }
+
+
+// float step(byte p){
+//   set_flow_pressure(p);
+//   flow_forward();
+//   wait(flow_duration);
+//   flow_backward();
+//   wait(flow_duration);
+//   return get_flowrate();
+// }
+
+
+// void wait(int d){
+//   last_switch_millis = millis();
+//   // unsigned long last_output = millis();
+//   while(true){
+//     update_monitor();
+//     read_buttons();
+//     if(is_testing == false){
+//       break;
+//     }
+//     // lcd_write(get_flowrate());
+//     unsigned long int current_millis = millis();
+//     if(current_millis - last_switch_millis > d){
+//       break;
+//     }
+//     // if(current_millis - last_output > 5000){
+//     //   last_output = millis();
+//     //   update_monitor();
+//     // }
+//   }
+  
+// }
+
+
+void dynamic_test(float flow_rate){
   flow_close();
   flow_pressure = 10;
   is_testing = true;
-  byte err_counter = 0;
   while (is_testing){
-    // flow_toward = !flow_toward;
-    // if(flow_toward){
-    //   flow_forward();
-    // } else {
-    //   flow_backward();
-    // }
-    float rate = step(flow_pressure);
-    if(rate > 0){
-      if (is_equal(rate, flow_rate, rate_precision)){
-        loops_counter++;
-      } else {
-        loops_counter = 0;
-
-        float k = flow_rate / rate;
-        if (abs(k-1) > 0.2){
-          flow_pressure *= 0.89*k;
-        } else {
-          if (rate > flow_rate){
-            flow_pressure--;
-          } else {
-            flow_pressure++;
-          }
-        }
-        
-      
-        // flow_pressure *= k;
-        Serial.print("K = ");
-        Serial.println(k);
-        // char b1[24] = "k (scale):             ";
-        // char b2[24];
-        // dtostrf(k, 6, 2, b2);
-        // char b3[24] = "Wait...                ";
-
-        // lcd_write3row(b1, b2, b3);
-        // delay(2000);
-        
-        
-      }
-    } else {
-      err_counter++;
-      flow_pressure++;
-    }
-    if(loops_counter >= good_count){
-      set_new_flow_pressure(flow_pressure);
-      is_testing = false;
-      break;
-    }
-    // if (err_counter >= good_count){
-    //   break;
-    // }
-
+    byte pressure = fixing_flow(flow_rate);
+    
   }
-  loops_counter = 0;
-  err_counter = 0;
+  // loops_counter = 0;
   set_flow_pressure(0);
   flow_close();
 }
 
-
-float step(byte p){
-  set_flow_pressure(p);
-  flow_forward();
-  wait(flow_duration);
-  flow_backward();
-  wait(flow_duration);
-  return get_flowrate();
+byte fixing_flow(float rate){
+  while(is_testing){
+    loops_counter++;
+    flow_forward();
+    byte begin_press = keep_flow(rate);
+    flow_backward();
+    byte finish_press = keep_flow(rate);
+    if (is_equal(begin_press, finish_press, 1)){
+      return finish_press;
+    }
+  }
 }
 
-
-void wait(int d){
-  last_switch_millis = millis();
-  // unsigned long last_output = millis();
-  while(true){
+byte keep_flow(float rate){
+  byte counter = 0;
+  while(is_testing){
+    set_flow_pressure(flow_pressure);
+    delay(100);
+    get_flowrate();
     update_monitor();
     read_buttons();
-    if(is_testing == false){
-      break;
+    if (is_equal(current_flowrate, rate, 5)){
+      counter++;
+    } else {
+      counter = 0;
+      float k = flow_rate / rate;
+      if (abs(k-1) > 0.2){
+        flow_pressure *= 0.89*k;
+      } else {
+        if (current_flowrate > rate){
+          flow_pressure--;
+        } else {
+          flow_pressure++;
+        }
+      }
     }
-    // lcd_write(get_flowrate());
-    unsigned long int current_millis = millis();
-    if(current_millis - last_switch_millis > d){
-      break;
-    }
-    // if(current_millis - last_output > 5000){
-    //   last_output = millis();
-    //   update_monitor();
-    // }
+    if (counter > 5) break;
   }
-  
+  return flow_pressure;
 }
-
 
 
 void setup() {
@@ -468,7 +499,7 @@ void setup() {
   EEPROM.begin();
   int data = 0;
   data = EEPROM.read(0);
-  flow_rate = EEPROM.read(1);
+  flow_rate_full = EEPROM.read(1);
   flow_rate_single = EEPROM.read(2);
   if(data >= 0 && data <= 255){
     flow_pressure = data;
@@ -577,11 +608,15 @@ void loop() {
   // Serial.println(btn_state);
   if(btn_state==true){
     // leds_state = testing();
-    dynamic_test();
+    if (md_full){
+      dynamic_test(flow_rate_full);
+    } else {
+      dynamic_test(flow_rate_single);
+    }
     // Serial.print("----");
   }
 
-  current_flowrate = get_flowrate();
+  // current_flowrate = get_flowrate();
 
   if(logs){
     // int pressure = analogRead(pressure_pin);
