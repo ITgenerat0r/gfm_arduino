@@ -266,7 +266,7 @@ void set_new_flow_rate(int value){
   if(md_full){
     flow_rate_full += value;
     if (flow_rate_full > 160) flow_rate_full = 160;
-    if (flow_rate_full < 0) flow_rate_full = 0;
+    if (flow_rate_full < 50) flow_rate_full = 50;
   } else {
     flow_rate_single += value;
     if (flow_rate_single > 160) flow_rate_single = 160;
@@ -333,6 +333,36 @@ void update_monitor(){
 
   oled.update();
 }
+
+
+void update_monitor(const char* data){
+  oled.clear();
+  if(md_full){
+    oled.drawMode("Full", flow_rate_full);
+  } else {
+    oled.drawMode("Single", flow_rate_single);
+  }
+  oled.drawRate(get_flowrate());
+  oled.drawPressure(current_pressure);
+  oled.drawResult(data);
+
+  oled.update();
+}
+
+// void update_monitor2(float rate, float pressure, const char* result){
+//   Serial.println("UPDATE 2");
+//   oled.clear();
+//   if(md_full){
+//     oled.drawMode("Full", flow_rate_full);
+//   } else {
+//     oled.drawMode("Single", flow_rate_single);
+//   }
+//   oled.drawRate(rate);
+//   oled.drawPressure(pressure);
+//   oled.drawResult(result);
+
+//   oled.update();
+// }
 
 
 
@@ -402,46 +432,80 @@ void update_monitor(){
 // }
 
 
-// float step(byte p){
-//   set_flow_pressure(p);
-//   flow_forward();
-//   wait(flow_duration);
-//   flow_backward();
-//   wait(flow_duration);
-//   return get_flowrate();
-// }
+float step(byte p){
+  set_flow_pressure(p);
+  flow_forward();
+  wait(flow_duration);
+  flow_backward();
+  wait(flow_duration);
+  return get_flowrate();
+}
 
 
-// void wait(int d){
-//   last_switch_millis = millis();
-//   // unsigned long last_output = millis();
-//   while(true){
-//     update_monitor();
-//     read_buttons();
-//     if(is_testing == false){
-//       break;
-//     }
-//     // lcd_write(get_flowrate());
-//     unsigned long int current_millis = millis();
-//     if(current_millis - last_switch_millis > d){
-//       break;
-//     }
-//     // if(current_millis - last_output > 5000){
-//     //   last_output = millis();
-//     //   update_monitor();
-//     // }
-//   }
+void wait(int d){
+  last_switch_millis = millis();
+  // unsigned long last_output = millis();
+  while(is_testing){
+    update_monitor();
+    read_buttons();
+    // lcd_write(get_flowrate());
+    unsigned long int current_millis = millis();
+    if(current_millis - last_switch_millis > d){
+      break;
+    }
+    // if(current_millis - last_output > 5000){
+    //   last_output = millis();
+    //   update_monitor();
+    // }
+  }
   
-// }
+}
+
+
+
+byte check_flow(byte pressure){
+  flow_close();
+  float rate = step(pressure);
+  for(byte i = 0; i < 20; i++){
+    float current_rate = step(pressure);
+    if(!is_equal(current_rate, rate, 5)){
+      flow_close();
+      return i;
+    }
+  }
+  flow_close();
+  return 0;
+}
 
 
 void dynamic_test(float flow_rate){
+  Serial.println("dynamic_test()");
   flow_close();
   flow_pressure = 10;
   is_testing = true;
   while (is_testing){
     byte pressure = fixing_flow(flow_rate);
-    
+    Serial.print("Pressure: "); Serial.println(pressure);
+    if (pressure == 0){
+      Serial.println("Pressure is 0");
+      // update_monitor2(current_flowrate, current_pressure, "Plug column");
+    }else{
+      // 20 loops
+      byte result = check_flow(pressure);
+      Serial.println(result);
+      if(result == 0){
+        // good
+        Serial.println("Good");
+        // update_monitor2(current_flowrate, current_pressure, "Stabilized");
+      } else {
+        // bad
+        Serial.println("Bad");
+        // char buffer[20];
+        // snprintf(buffer, sizeof(buffer), "Error on %d", result);
+        // const char* cstr = buffer;
+        // update_monitor2(current_flowrate, current_pressure, cstr);
+      }
+    }
   }
   // loops_counter = 0;
   set_flow_pressure(0);
@@ -449,31 +513,48 @@ void dynamic_test(float flow_rate){
 }
 
 byte fixing_flow(float rate){
+  // Serial.println("fixing_flow()");
   while(is_testing){
     loops_counter++;
     flow_forward();
     byte begin_press = keep_flow(rate);
     flow_backward();
     byte finish_press = keep_flow(rate);
-    if (is_equal(begin_press, finish_press, 1)){
+    if (is_equal(begin_press, finish_press, 5)){
+      Serial.print("Flowrate:");
+      Serial.println(current_flowrate);
       return finish_press;
     }
   }
 }
 
 byte keep_flow(float rate){
+  // Serial.println("keep_flow()");
   byte counter = 0;
   while(is_testing){
+    // Serial.println("Flow");
     set_flow_pressure(flow_pressure);
-    delay(100);
-    get_flowrate();
-    update_monitor();
-    read_buttons();
+
+    // wait
+    // Serial.println("Wait");
+    unsigned long last_wait = millis();
+    while(is_testing){
+      // float x = get_flowrate();
+      update_monitor();
+      read_buttons();
+      unsigned long current_millis = millis();
+      if(abs(current_millis - last_wait) > 500){
+        break;
+      }
+    }
+
+    // Serial.println("End wait");
+    // end wait
     if (is_equal(current_flowrate, rate, 5)){
       counter++;
     } else {
       counter = 0;
-      float k = flow_rate / rate;
+      float k = rate / current_flowrate;
       if (abs(k-1) > 0.2){
         flow_pressure *= 0.89*k;
       } else {
@@ -484,7 +565,14 @@ byte keep_flow(float rate){
         }
       }
     }
+    // char buffer[20];
+    // snprintf(buffer, sizeof(buffer), "Counter %%", counter);
+    // const char* cstr = buffer;
+    // update_monitor(buffer);
     if (counter > 5) break;
+    if (flow_pressure > 200 && current_flowrate < 10){
+      return 0;
+    }
   }
   return flow_pressure;
 }
