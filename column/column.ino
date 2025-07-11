@@ -569,8 +569,13 @@ byte keep_flow(float rate){
     // snprintf(buffer, sizeof(buffer), "Counter %%", counter);
     // const char* cstr = buffer;
     // update_monitor(buffer);
+    Serial.print("Flowrate: ");
+    Serial.println(current_flowrate);
+    Serial.println(flow_pressure);
     if (counter > 5) break;
     if (flow_pressure > 200 && current_flowrate < 10){
+      is_testing = false;
+      Serial.println("EXIT");
       return 0;
     }
   }
