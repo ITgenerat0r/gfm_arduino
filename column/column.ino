@@ -68,6 +68,9 @@
 // #define 
 
 
+
+
+
 // U8G2_SSD1309_128X64_NONAME0_1_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 3, /* data=*/ 2, /* cs=*/ 4, /* dc=*/ 16, /* reset=*/ 9);    
 
 // U8G2_SSD1309_128X64_NONAME2_1_4W_SW_SPI u8g2(U8G2_R0, /* clock=*/ 3, /* data=*/ 2, /* cs=*/ 4, /* dc=*/ 16, /* reset=*/ 9);  
@@ -107,7 +110,7 @@ bool is_flow_rate_changed = false;
 int flow_rate_full = 60;
 int flow_rate_single = 70;
 
-float flow_rate_table[10] = { 0.0 };
+// float flow_rate_table[10] = { 0.0 };
 byte flow_pos = 0;
 float current_flowrate = 0;
 
@@ -130,6 +133,7 @@ unsigned long int last_switch_millis = 0;
 
 
 bool md_full = false; // mode
+// char result_buf[20];
 
 
 
@@ -173,7 +177,7 @@ void flow_backward(){
 
 void set_flow_pressure(const byte st){
   analogWrite(gear_pin, st);
-  current_pressure = st*0.02;
+  current_pressure = st*0.0125;
 }
 
 
@@ -331,23 +335,26 @@ void update_monitor(){
   oled.drawRate(get_flowrate());
   oled.drawPressure(current_pressure);
 
-  oled.update();
-}
-
-
-void update_monitor(const char* data){
-  oled.clear();
-  if(md_full){
-    oled.drawMode("Full", flow_rate_full);
-  } else {
-    oled.drawMode("Single", flow_rate_single);
-  }
-  oled.drawRate(get_flowrate());
-  oled.drawPressure(current_pressure);
-  oled.drawResult(data);
+  // const char* result_pointer = result_buf;
+  // oled.drawRow(4, result_pointer);
 
   oled.update();
 }
+
+
+// void update_monitor(const char* data){
+//   oled.clear();
+//   if(md_full){
+//     oled.drawMode("Full", flow_rate_full);
+//   } else {
+//     oled.drawMode("Single", flow_rate_single);
+//   }
+//   oled.drawRate(get_flowrate());
+//   oled.drawPressure(current_pressure);
+//   oled.drawResult(data);
+
+//   oled.update();
+// }
 
 // void update_monitor2(float rate, float pressure, const char* result){
 //   Serial.println("UPDATE 2");
@@ -488,7 +495,7 @@ void dynamic_test(float flow_rate){
     Serial.print("Pressure: "); Serial.println(pressure);
     if (pressure == 0){
       Serial.println("Pressure is 0");
-      // update_monitor2(current_flowrate, current_pressure, "Plug column");
+      // update_monitor("Plug column");
     }else{
       // 20 loops
       byte result = check_flow(pressure);
@@ -543,7 +550,7 @@ byte keep_flow(float rate){
       update_monitor();
       read_buttons();
       unsigned long current_millis = millis();
-      if(abs(current_millis - last_wait) > 500){
+      if(abs(current_millis - last_wait) > 1000){
         break;
       }
     }
@@ -572,11 +579,14 @@ byte keep_flow(float rate){
     Serial.print("Flowrate: ");
     Serial.println(current_flowrate);
     Serial.println(flow_pressure);
+    Serial.print("Counter: "); Serial.println(counter);
     if (counter > 5) break;
-    if (flow_pressure > 200 && current_flowrate < 10){
+    if ((flow_pressure > 200 || flow_pressure == 0) && current_flowrate < 10){
       is_testing = false;
+      flow_pressure = 0;
       Serial.println("EXIT");
-      return 0;
+      // snprintf(result_buf, sizeof(result_buf), "Plug column");
+      break;
     }
   }
   return flow_pressure;
@@ -585,7 +595,7 @@ byte keep_flow(float rate){
 
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(115200);
+  Serial.begin(9600);
   Serial.setTimeout(1);
   Serial.print("Starting...      ");
 
@@ -621,6 +631,8 @@ void setup() {
   oled.drawRow(1, "Starting...");
   oled.drawRow(2, "Version 2.0");
   oled.update();
+
+  // snprintf(result_buf, sizeof(result_buf), "-");
   
 
 

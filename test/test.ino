@@ -21,7 +21,7 @@ OLEDHelper oled(u8g2);
 
 // Button btn_up(3);
 // Button btn_down(2);
-Button btn_mode(15);
+// Button btn_mode(15);
 
 // Примеры переменных
 int var1 = 123;
@@ -38,40 +38,40 @@ void setup(void) {
 
   // btn_up.begin();
   // btn_down.begin();
-  btn_mode.begin();
+  // btn_mode.begin();
 
 
-  Serial.begin(115200);
-  Serial.println("Done!");
+  // Serial.begin(115200);
+  // Serial.println("Done!");
   delay(800);
 }
 
 bool md_full = false;
 
-void read_buttons(){
+// void read_buttons(){
 
-  // btn_up.update();
-  // btn_down.update();
-  btn_mode.update();
-  // if (btn_up.isPressed()){
-  //   var1 += 1;
-  //   Serial.println("UP pressed!");
-  // }
-  // if (btn_down.isPressed()){
-  //   var1 -= 1;
-  //   Serial.println("DOWN pressed!");
-  // }
-  if (btn_mode.isPressed()){
-    Serial.println("MODE pressed!");
-    md_full = !md_full;
-    if(md_full){
-      oled.drawMode("Full", 80);
-    } else {
-      oled.drawMode("Single", 120);
-    }
-    oled.update();
-  }
-}
+//   // btn_up.update();
+//   // btn_down.update();
+//   btn_mode.update();
+//   // if (btn_up.isPressed()){
+//   //   var1 += 1;
+//   //   Serial.println("UP pressed!");
+//   // }
+//   // if (btn_down.isPressed()){
+//   //   var1 -= 1;
+//   //   Serial.println("DOWN pressed!");
+//   // }
+//   if (btn_mode.isPressed()){
+//     Serial.println("MODE pressed!");
+//     md_full = !md_full;
+//     if(md_full){
+//       oled.drawMode("Full", 80);
+//     } else {
+//       oled.drawMode("Single", 120);
+//     }
+//     oled.update();
+//   }
+// }
 
 void loop(void) {
   oled.clear();

@@ -6,6 +6,9 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 
+
+#define BUFFER_SIZE 64
+
 class OLEDHelper {
   public:
     OLEDHelper(U8G2& display); // Конструктор
@@ -26,8 +29,8 @@ class OLEDHelper {
 
   private:
     U8G2* _display;
-    static const uint8_t _bufferSize = 20;
-    char _buffer[_bufferSize];
+    char _buffer[BUFFER_SIZE];
+    char _low_buffer[32];
 
     void drawLabelValue(int x, int y, const char* label, const char* value);
 };
