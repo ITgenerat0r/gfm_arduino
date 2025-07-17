@@ -2,6 +2,8 @@
 #include <U8g2lib.h>
 #include <EEPROM.h>
 
+#include <stm32_def.h>
+
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
 #endif
@@ -10,18 +12,18 @@
 
 
 // digital
-#define valve_1_pin 4
-#define valve_2_pin 7
-#define green_led_pin 5
-#define gear_pin 6
-#define red_led_pin 8
-#define button_pin 9
-#define btn_up_pin 3
-#define btn_down_pin 2
-#define btn_mode_pin 15
+#define VALVE_1_PIN PA8
+#define VALVE_2_PIN PA15
+#define RED_LED_PIN PB3
+#define GREEN_LED_PIN PB4
+#define GEAR_PIN PA1
+#define BTN_START_PIN PB6
+#define BTN_UP_PIN PB7
+#define BTN_DOWN_PIN PB9
+#define BTN_MODE_PIN PB8
 
 // analog
-#define flowrate_pin 0
+#define FLOWRATE_PIN PA3
 // #define pressure_pin 2
 
 
@@ -32,39 +34,39 @@
 
 
 // mini pro
-#define clk 13
-#define mosi 11
-#define cs 10
-#define dc 17
-#define res 16
+#define CLK_PIN PA5
+#define MOSI_PIN PA7
+#define CS_PIN PA4
+#define DC_PIN PB0
+#define RES_PIN PB1
 
 
 // micro lattepanda
-// #define clk 3
-// #define mosi 2
+// #define CLK_PIN 3
+// #define MOSI_PIN 2
 // #define ss 4
-// #define dc 18
-// #define res 9
+// #define DC_PIN 18
+// #define RES_PIN 9
 
 
 // for testing()
-#define min_rate 50
-#define max_rate 150
-#define pre_min_rate 300
-#define pre_max_rate 400
+#define MIN_RATE 50
+#define MAX_RATE 150
+#define PRE_MIN_RATE 300
+#define PRE_MAX_RATE 400
 
 // for blink_led
-#define led_on_delay 100
-#define led_off_delay 100
-#define led_long_delay 1000
+#define LED_ON_DELAY 100
+#define LED_OFF_DELAY 100
+#define LED_LONG_DELAY 1000
 
-#define RATE_VOLTAGE_CORRECTION 0.986
+#define RATE_VOLTAGE_CORRECTION 1.124 // 0.986
 #define RATE_VOLTAGE_OFFSET 1
 
 
-#define rate_precision 5
-#define flow_duration 10000//10000
-#define good_count 20//20
+#define RATE_PRECISION 5
+#define FLOW_DURATION 10000//10000
+#define GOOD_COUNT 20//20
 // #define 
 
 
@@ -77,11 +79,11 @@
 // U8G2_SSD1309_128X64_NONAME2_2_4W_SW_SPI u8g2(U8G2_R3, /* clock=*/ 3, /* data=*/ 2, /* cs=*/ 4, /* dc=*/ 16, /* reset=*/ 9);
 U8G2_SSD1309_128X64_NONAME2_F_4W_SW_SPI u8g2(
   U8G2_R2, 
-  /* clock=*/ clk, 
-  /* data=*/ mosi, 
-  /* cs=*/ cs, 
-  /* dc=*/ dc, 
-  /* reset=*/ res
+  /* clock=*/ CLK_PIN, 
+  /* data=*/ MOSI_PIN, 
+  /* cs=*/ CS_PIN, 
+  /* dc=*/ DC_PIN, 
+  /* reset=*/ RES_PIN
 );
 
 OLEDHelper oled(u8g2);
@@ -94,7 +96,7 @@ bool is_testing = false;
 
 // blink_led()
 byte leds_state = 0;
-unsigned long int last_millis = 0;
+unsigned long last_millis = 0;
 int current_delay = 0;
 bool state = false;
 byte blink_counter = 0;
@@ -110,13 +112,13 @@ bool is_flow_rate_changed = false;
 int flow_rate_full = 60;
 int flow_rate_single = 70;
 
-// float flow_rate_table[10] = { 0.0 };
+float flow_rate_table[2] = { 0.0 };
 byte flow_pos = 0;
 float current_flowrate = 0;
 
 
 // read_buttons()
-unsigned long int last_time_pressed = 0;
+unsigned long last_time_pressed = 0;
 bool is_skip = false;
 
 
@@ -128,12 +130,13 @@ bool flow_toward = false;
 
 
 // wait()
-unsigned long int last_switch_millis = 0;
+unsigned long last_switch_millis = 0;
 
 
 
 bool md_full = false; // mode
-// char result_buf[20];
+char result_buf[25];
+char info_buf[25];
 
 
 
@@ -161,41 +164,44 @@ void enable(const int pin, const bool state){
 }
 
 void flow_close(){
-  digitalWrite(valve_1_pin, LOW);
-  digitalWrite(valve_2_pin, LOW);
+  digitalWrite(VALVE_1_PIN, LOW);
+  digitalWrite(VALVE_2_PIN, LOW);
 }
 
 void flow_forward(){
-  digitalWrite(valve_1_pin, LOW);
-  digitalWrite(valve_2_pin, HIGH);
+  digitalWrite(VALVE_1_PIN, LOW);
+  digitalWrite(VALVE_2_PIN, HIGH);
 }
 
 void flow_backward(){
-  digitalWrite(valve_2_pin, LOW);
-  digitalWrite(valve_1_pin, HIGH);
+  digitalWrite(VALVE_2_PIN, LOW);
+  digitalWrite(VALVE_1_PIN, HIGH);
 }
 
 void set_flow_pressure(const byte st){
-  analogWrite(gear_pin, st);
-  current_pressure = st*0.0125;
+  analogWrite(GEAR_PIN, st);
+  current_pressure = st*0.00512;
 }
 
 
 float get_flowrate(){
-  float u = 0.005 * RATE_VOLTAGE_CORRECTION * analogRead(flowrate_pin);
+  // float u = 0.5 * RATE_VOLTAGE_CORRECTION * analogRead(FLOWRATE_PIN);
+  // float rate = PFMV505_flow(u, RATE_VOLTAGE_OFFSET);
+  float u = 5.0 * analogRead(FLOWRATE_PIN) * (3.3 / 4095.0) * RATE_VOLTAGE_CORRECTION;
   float rate = PFMV505_flow(u, RATE_VOLTAGE_OFFSET);
+
   // flow_pos++;
-  // if (flow_pos > sizeof(flow_rate_table)-1){
+  // if (flow_pos >= sizeof(flow_rate_table)){
   //   flow_pos = 0;
   // }
   // flow_rate_table[flow_pos] = rate;
-  // float sum_flow = 0;
+  // float sum_flow = 0.0;
   // for (byte i = 0; i < sizeof(flow_rate_table); i++){
   //   sum_flow += flow_rate_table[i]/sizeof(flow_rate_table);
-  //   Serial.print("+=");
-  //   Serial.println(flow_rate_table[i]);
   // }
-  current_flowrate = rate;
+  
+  current_flowrate += rate;
+  current_flowrate /= 2;
   // Serial.print("Flowrate: ");
   // Serial.println(current_flowrate);
   return current_flowrate;
@@ -205,7 +211,7 @@ bool is_equal(float a, float b, const byte precise){
   if (a < 0) a = 0;
   if (b < 0) b = 0;
   float precise_range = a*precise/100;
-  if(abs(a-b) < precise_range){
+  if(abs(a-b) <= precise_range){
     return true;
   }
   return false;
@@ -218,19 +224,19 @@ bool is_equal(float a, float b, const byte precise){
 
 
 void blink_led(const byte pin, const byte count){
-  unsigned long  int current_millis = millis();
+  unsigned long  current_millis = millis();
   if(current_millis - last_millis > current_delay){
     last_millis = current_millis;
     state = !state;
     enable(pin, state);
     if (state){
-      current_delay = led_on_delay;
+      current_delay = LED_ON_DELAY;
     } else {
       if(++blink_counter == count){
         blink_counter = 0;
-        current_delay = led_long_delay;
+        current_delay = LED_LONG_DELAY;
       } else {
-        current_delay = led_off_delay;
+        current_delay = LED_OFF_DELAY;
       }
     }
     
@@ -282,18 +288,24 @@ void set_new_flow_rate(int value){
 
 void read_buttons(){
   
-  bool btn_state = !digitalRead(button_pin);
-  bool btn_up_state = !digitalRead(btn_up_pin);
-  bool btn_down_state = !digitalRead(btn_down_pin);
-  bool btn_mode_state = !digitalRead(btn_mode_pin);
+  bool btn_state = !digitalRead(BTN_START_PIN);
+  bool btn_up_state = !digitalRead(BTN_UP_PIN);
+  bool btn_down_state = !digitalRead(BTN_DOWN_PIN);
+  bool btn_mode_state = !digitalRead(BTN_MODE_PIN);
   if(btn_state | btn_up_state | btn_down_state | btn_mode_state == true){
-    unsigned long int current_time = millis();
+    unsigned long current_time = millis();
+
+    // debounce filter
     if(current_time - last_time_pressed < 10){
       return;
     }
+
+    // sckip multiple increment if short pressed
     if(current_time - last_time_pressed < 200 && is_skip == true){
       return;
     }
+
+    // for long pressed
     if(current_time - last_time_pressed > 150 && current_time - last_time_pressed < 500){
       return;
     }
@@ -335,8 +347,11 @@ void update_monitor(){
   oled.drawRate(get_flowrate());
   oled.drawPressure(current_pressure);
 
-  // const char* result_pointer = result_buf;
-  // oled.drawRow(4, result_pointer);
+  const char* result_pointer = result_buf;
+  oled.drawRow(4, result_pointer);
+
+  const char* info_pointer = info_buf;
+  oled.drawRow(5, info_pointer);
 
   oled.update();
 }
@@ -388,7 +403,7 @@ void update_monitor(){
   //   // }
   //   float rate = step(flow_pressure);
   //   if(rate > 0){
-  //     if (is_equal(rate, flow_rate, rate_precision)){
+  //     if (is_equal(rate, flow_rate, RATE_PRECISION)){
   //       loops_counter++;
   //     } else {
   //       loops_counter = 0;
@@ -422,12 +437,12 @@ void update_monitor(){
   //     err_counter++;
   //     flow_pressure++;
   //   }
-  //   if(loops_counter >= good_count){
+  //   if(loops_counter >= GOOD_COUNT){
   //     set_new_flow_pressure(flow_pressure);
   //     is_testing = false;
   //     break;
   //   }
-  //   // if (err_counter >= good_count){
+  //   // if (err_counter >= GOOD_COUNT){
   //   //   break;
   //   // }
 
@@ -442,9 +457,9 @@ void update_monitor(){
 float step(byte p){
   set_flow_pressure(p);
   flow_forward();
-  wait(flow_duration);
+  wait(FLOW_DURATION);
   flow_backward();
-  wait(flow_duration);
+  wait(FLOW_DURATION);
   return get_flowrate();
 }
 
@@ -456,7 +471,7 @@ void wait(int d){
     update_monitor();
     read_buttons();
     // lcd_write(get_flowrate());
-    unsigned long int current_millis = millis();
+    unsigned long current_millis = millis();
     if(current_millis - last_switch_millis > d){
       break;
     }
@@ -471,10 +486,18 @@ void wait(int d){
 
 
 byte check_flow(byte pressure){
+  snprintf(result_buf, sizeof(result_buf), "checking...");
+  snprintf(info_buf, sizeof(info_buf), "loop: 0");
   flow_close();
   float rate = step(pressure);
-  for(byte i = 0; i < 20; i++){
+  for(byte i = 0; i < 5; i++){
     float current_rate = step(pressure);
+    char rr[20];
+    char pp[20];
+    dtostrf(current_rate, 6, 2, rr);
+    dtostrf(0.00512*pressure, 6, 2, pp);
+
+    snprintf(info_buf, sizeof(info_buf), "%d P%s R%s", i, pp, rr);
     if(!is_equal(current_rate, rate, 5)){
       flow_close();
       return i;
@@ -486,35 +509,47 @@ byte check_flow(byte pressure){
 
 
 void dynamic_test(float flow_rate){
-  Serial.println("dynamic_test()");
+  // Serial.println("dynamic_test()");
+  snprintf(result_buf, sizeof(result_buf), "Testing...");
   flow_close();
-  flow_pressure = 10;
+  flow_pressure = 15;
   is_testing = true;
   while (is_testing){
     byte pressure = fixing_flow(flow_rate);
-    Serial.print("Pressure: "); Serial.println(pressure);
+    // snprintf(info_buf, sizeof(info_buf), "Press %d", pressure);
+    // byte pressure = 10;
+    // Serial.print("Pressure: "); Serial.println(pressure);
     if (pressure == 0){
-      Serial.println("Pressure is 0");
+      // Serial.println("Pressure is 0");
       // update_monitor("Plug column");
+
+      snprintf(result_buf, sizeof(result_buf), "Plug column");
+      // update_monitor();
     }else{
       // 20 loops
       byte result = check_flow(pressure);
-      Serial.println(result);
+      // byte result = 0;
+      // Serial.println(result);
       if(result == 0){
         // good
-        Serial.println("Good");
+        // Serial.println("Good");
         // update_monitor2(current_flowrate, current_pressure, "Stabilized");
+        snprintf(result_buf, sizeof(result_buf), "Good!");
+        // update_monitor();
       } else {
         // bad
-        Serial.println("Bad");
+        // Serial.println("Bad");
         // char buffer[20];
         // snprintf(buffer, sizeof(buffer), "Error on %d", result);
         // const char* cstr = buffer;
         // update_monitor2(current_flowrate, current_pressure, cstr);
+        snprintf(result_buf, sizeof(result_buf), "Bad!");
+        // update_monitor();
       }
     }
+    is_testing = false;
   }
-  // loops_counter = 0;
+  loops_counter = 0;
   set_flow_pressure(0);
   flow_close();
 }
@@ -523,15 +558,18 @@ byte fixing_flow(float rate){
   // Serial.println("fixing_flow()");
   while(is_testing){
     loops_counter++;
+
+    snprintf(result_buf, sizeof(result_buf), "loops_counter %d", loops_counter);
     flow_forward();
     byte begin_press = keep_flow(rate);
     flow_backward();
     byte finish_press = keep_flow(rate);
     if (is_equal(begin_press, finish_press, 5)){
-      Serial.print("Flowrate:");
-      Serial.println(current_flowrate);
+      // Serial.print("Flowrate:");
+      // Serial.println(current_flowrate);
       return finish_press;
     }
+    // snprintf(info_buf, sizeof(info_buf), "Press %d %d", begin_press, finish_press);
   }
 }
 
@@ -546,11 +584,12 @@ byte keep_flow(float rate){
     // Serial.println("Wait");
     unsigned long last_wait = millis();
     while(is_testing){
+      snprintf(info_buf, sizeof(info_buf), "counter %d", counter);
       // float x = get_flowrate();
       update_monitor();
       read_buttons();
       unsigned long current_millis = millis();
-      if(abs(current_millis - last_wait) > 1000){
+      if(current_millis - last_wait > 3000){
         break;
       }
     }
@@ -563,12 +602,17 @@ byte keep_flow(float rate){
       counter = 0;
       float k = rate / current_flowrate;
       if (abs(k-1) > 0.2){
+        if (0.89*k*flow_pressure>255.0){
+          flow_pressure = 255;
+        }
         flow_pressure *= 0.89*k;
       } else {
         if (current_flowrate > rate){
-          flow_pressure--;
+          if (flow_pressure > 0)
+            flow_pressure--;
         } else {
-          flow_pressure++;
+          if (flow_pressure < 255) 
+            flow_pressure++;
         }
       }
     }
@@ -576,16 +620,19 @@ byte keep_flow(float rate){
     // snprintf(buffer, sizeof(buffer), "Counter %%", counter);
     // const char* cstr = buffer;
     // update_monitor(buffer);
-    Serial.print("Flowrate: ");
-    Serial.println(current_flowrate);
-    Serial.println(flow_pressure);
-    Serial.print("Counter: "); Serial.println(counter);
-    if (counter > 5) break;
+    // Serial.print("Flowrate: ");
+    // Serial.println(current_flowrate);
+    // Serial.println(flow_pressure);
+    // Serial.print("Counter: "); Serial.println(counter);
+    if (counter > 5) {
+      break;
+      // is_testing = false;
+    }
     if ((flow_pressure > 200 || flow_pressure == 0) && current_flowrate < 10){
       is_testing = false;
       flow_pressure = 0;
-      Serial.println("EXIT");
-      // snprintf(result_buf, sizeof(result_buf), "Plug column");
+      // Serial.println("EXIT");
+      snprintf(result_buf, sizeof(result_buf), "Plug column");
       break;
     }
   }
@@ -593,11 +640,31 @@ byte keep_flow(float rate){
 }
 
 
+
+
+
+
+
+
+
+
+
+
 void setup() {
   // put your setup code here, to run once:
-  Serial.begin(9600);
-  Serial.setTimeout(1);
-  Serial.print("Starting...      ");
+  // Serial.begin(9600);
+  // Serial.setTimeout(1);
+  // Serial.print("Starting...      ");
+
+  pinMode(FLOWRATE_PIN, INPUT_ANALOG);
+  analogReference(AR_DEFAULT);  
+  analogReadResolution(12);
+  // Включаем тактирование порта B
+  // RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;
+
+  // // Настройка PB5 как вход без pull-up/pull-down
+  // GPIOB->CRL &= ~(0xF << (5 * 4));  // Очистить биты настройки
+  // GPIOB->CRL |= (0x00 << (5 * 4));  // Input floating
 
   EEPROM.begin();
   int data = 0;
@@ -608,19 +675,19 @@ void setup() {
     flow_pressure = data;
   }
 
-  analogReference(INTERNAL);
+  // analogReference(INTERNAL);
 
-  pinMode(valve_1_pin, OUTPUT);
-  pinMode(valve_2_pin, OUTPUT);
-  pinMode(flowrate_pin, OUTPUT);
-  pinMode(gear_pin, OUTPUT);
+  pinMode(VALVE_1_PIN, OUTPUT);
+  pinMode(VALVE_2_PIN, OUTPUT);
+  // pinMode(FLOWRATE_PIN, INPUT);
+  pinMode(GEAR_PIN, OUTPUT);
   // pinMode(pressure_pin, OUTPUT);
-  pinMode(red_led_pin, OUTPUT);
-  pinMode(green_led_pin, OUTPUT);
-  pinMode(button_pin, INPUT);
-  pinMode(btn_up_pin, INPUT);
-  pinMode(btn_down_pin, INPUT);
-  pinMode(btn_mode_pin, INPUT);
+  pinMode(RED_LED_PIN, OUTPUT);
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  pinMode(BTN_START_PIN, INPUT);
+  pinMode(BTN_UP_PIN, INPUT);
+  pinMode(BTN_DOWN_PIN, INPUT);
+  pinMode(BTN_MODE_PIN, INPUT);
 
   u8g2.begin();
   u8g2.setFont(u8g2_font_ncenB08_tr);
@@ -632,24 +699,26 @@ void setup() {
   oled.drawRow(2, "Version 2.0");
   oled.update();
 
-  // snprintf(result_buf, sizeof(result_buf), "-");
+
+  snprintf(result_buf, sizeof(result_buf), "Done!");
+  snprintf(info_buf, sizeof(info_buf), "");
   
 
 
-  digitalWrite(green_led_pin, HIGH);
+  digitalWrite(GREEN_LED_PIN, HIGH);
   delay(200);
-  digitalWrite(red_led_pin, HIGH);
+  digitalWrite(RED_LED_PIN, HIGH);
   delay(500);
-  digitalWrite(valve_1_pin, HIGH);
+  digitalWrite(VALVE_1_PIN, HIGH);
   delay(1000);
-  digitalWrite(valve_1_pin, LOW);
+  digitalWrite(VALVE_1_PIN, LOW);
   delay(500);
-  digitalWrite(valve_2_pin, HIGH);
+  digitalWrite(VALVE_2_PIN, HIGH);
   delay(1000);
-  digitalWrite(valve_2_pin, LOW);
+  digitalWrite(VALVE_2_PIN, LOW);
   delay(500);
-  digitalWrite(green_led_pin, LOW);
-  digitalWrite(red_led_pin, LOW);
+  digitalWrite(GREEN_LED_PIN, LOW);
+  digitalWrite(RED_LED_PIN, LOW);
 
 
   // oled.clear();
@@ -658,7 +727,7 @@ void setup() {
 //  
 //  u8g2.clearBuffer();
 
-  Serial.println("Done!");
+  // Serial.println("Done!");
 
   // char b1[24] = "Flowrate:............./";
   // dtostrf(get_flowrate(), 24, 0, b1);
@@ -674,42 +743,42 @@ void loop() {
   // put your main code here, to run repeatedly:
   
   // that's for debugging
-  if (Serial.available()){ 
-    int ss = Serial.readString().toInt();
-    if(ss > 255){
-      if(ss == 300){
-        digitalWrite(valve_1_pin, LOW);
-      } else if (ss == 301){
-        digitalWrite(valve_1_pin, HIGH);
-      }else if (ss == 400){
-        digitalWrite(valve_2_pin, LOW);
-      }else if (ss == 401){
-        digitalWrite(valve_2_pin, HIGH);
-      } else if (ss == 500){
-        digitalWrite(red_led_pin, LOW);
-      }else if (ss == 501){
-        digitalWrite(red_led_pin, HIGH);
-      }else if (ss == 600){
-        digitalWrite(green_led_pin, LOW);
-      }else if (ss == 601){
-        digitalWrite(green_led_pin, HIGH);
-      }else if (ss == 700){
-        logs = !logs;
-      }else if (ss == 1000){
-        // leds_state = testing();
-      }else{
-        Serial.println(is_equal(ss, 1000, 5));
-      }
-    } else {
-      analogWrite(gear_pin, ss);
-      if (ss == 0){
-        u8g2.begin();
-      }
-    }
+  // if (Serial.available()){ 
+  //   int ss = Serial.readString().toInt();
+  //   if(ss > 255){
+  //     if(ss == 300){
+  //       digitalWrite(VALVE_1_PIN, LOW);
+  //     } else if (ss == 301){
+  //       digitalWrite(VALVE_1_PIN, HIGH);
+  //     }else if (ss == 400){
+  //       digitalWrite(VALVE_2_PIN, LOW);
+  //     }else if (ss == 401){
+  //       digitalWrite(VALVE_2_PIN, HIGH);
+  //     } else if (ss == 500){
+  //       digitalWrite(RED_LED_PIN, LOW);
+  //     }else if (ss == 501){
+  //       digitalWrite(RED_LED_PIN, HIGH);
+  //     }else if (ss == 600){
+  //       digitalWrite(GREEN_LED_PIN, LOW);
+  //     }else if (ss == 601){
+  //       digitalWrite(GREEN_LED_PIN, HIGH);
+  //     }else if (ss == 700){
+  //       logs = !logs;
+  //     }else if (ss == 1000){
+  //       // leds_state = testing();
+  //     }else{
+  //       // Serial.println(is_equal(ss, 1000, 5));
+  //     }
+  //   } else {
+  //     analogWrite(GEAR_PIN, ss);
+  //     if (ss == 0){
+  //       u8g2.begin();
+  //     }
+    // }
     // lcd_write(ss);
-  }
+  // }
 
-  bool btn_state = !digitalRead(button_pin);
+  bool btn_state = !digitalRead(BTN_START_PIN);
   // Serial.println(btn_state);
   if(btn_state==true){
     // leds_state = testing();
@@ -725,23 +794,23 @@ void loop() {
 
   if(logs){
     // int pressure = analogRead(pressure_pin);
-  float rate = 0.005 * RATE_VOLTAGE_CORRECTION * analogRead(flowrate_pin);
-  Serial.print("Flowrate: ");
-  Serial.print(rate);
-  Serial.print("v      (");
-  Serial.print(PFMV505_flow(rate, RATE_VOLTAGE_OFFSET));
-  Serial.print("sm3/m)");
-  Serial.println();
+  float rate = 0.005 * RATE_VOLTAGE_CORRECTION * analogRead(FLOWRATE_PIN);
+  // Serial.print("Flowrate: ");
+  // Serial.print(rate);
+  // Serial.print("v      (");
+  // Serial.print(PFMV505_flow(rate, RATE_VOLTAGE_OFFSET));
+  // Serial.print("sm3/m)");
+  // Serial.println();
   }
   if(leds_state == 0){ 
-    enable(red_led_pin, false);
-    enable(green_led_pin, false);
+    enable(RED_LED_PIN, false);
+    enable(GREEN_LED_PIN, false);
   } else if (leds_state == 1){
-    enable(red_led_pin, false);
-    enable(green_led_pin, true);
+    enable(RED_LED_PIN, false);
+    enable(GREEN_LED_PIN, true);
   } else {
-    enable(red_led_pin, true);
-    blink_led(green_led_pin, leds_state - 1);
+    enable(RED_LED_PIN, true);
+    blink_led(GREEN_LED_PIN, leds_state - 1);
   }
   update_monitor();
   read_buttons();

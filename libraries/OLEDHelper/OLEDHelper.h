@@ -7,7 +7,7 @@
 #include <U8g2lib.h>
 
 
-#define BUFFER_SIZE 64
+#define BUFFER_SIZE 32
 
 class OLEDHelper {
   public:
@@ -30,7 +30,7 @@ class OLEDHelper {
   private:
     U8G2* _display;
     char _buffer[BUFFER_SIZE];
-    char _low_buffer[32];
+    char _low_buffer[16];
 
     void drawLabelValue(int x, int y, const char* label, const char* value);
 };
