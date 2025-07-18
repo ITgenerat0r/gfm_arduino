@@ -53,7 +53,7 @@ void OLEDHelper::drawRate(const float val){
   // drawLabelValue(2, 22, "Rate: ", (String(val, 2)+"cm3/min").c_str());
   dtostrf(val, 6, 2, _low_buffer);
   const char* baf = _low_buffer;
-  snprintf(_buffer, BUFFER_SIZE, "Rate %scm3/m", baf);
+  snprintf(_buffer, BUFFER_SIZE, "Rate: %scm3/m", baf);
   const char* cstr = _buffer;
   drawRow(2, cstr); 
 }
@@ -61,7 +61,7 @@ void OLEDHelper::drawRate(const float val){
 void OLEDHelper::drawPressure(const float val){
   // drawLabelValue(2, 34, "Pressure: ", (String(val, 2)+"MPa").c_str());
   dtostrf(val, 4, 2, _low_buffer);
-  snprintf(_buffer, BUFFER_SIZE, "P= %sAtm", _low_buffer);
+  snprintf(_buffer, BUFFER_SIZE, "Pressure: %sAtm", _low_buffer);
   // char* c = _buffer;
   // c = strcp(c, "Pressure ");
   // c = itos_d(c, 10, 10, 0);

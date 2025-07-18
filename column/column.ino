@@ -63,11 +63,15 @@
 #define RATE_VOLTAGE_CORRECTION 1.124 // 0.986
 #define RATE_VOLTAGE_OFFSET 1
 
+#define PRESSURE_CORRECTION 0.00662
+
 
 #define RATE_PRECISION 5
 #define FLOW_DURATION 10000//10000
 #define GOOD_COUNT 20//20
 // #define 
+
+#define FINAL_LOOPS 5
 
 
 
@@ -115,6 +119,7 @@ int flow_rate_single = 70;
 float flow_rate_table[2] = { 0.0 };
 byte flow_pos = 0;
 float current_flowrate = 0;
+float flow_res[FINAL_LOOPS] = { 0.0 };
 
 
 // read_buttons()
@@ -180,7 +185,7 @@ void flow_backward(){
 
 void set_flow_pressure(const byte st){
   analogWrite(GEAR_PIN, st);
-  current_pressure = st*0.00512;
+  current_pressure = st*PRESSURE_CORRECTION;
 }
 
 
@@ -487,23 +492,34 @@ void wait(int d){
 
 byte check_flow(byte pressure){
   snprintf(result_buf, sizeof(result_buf), "checking...");
-  snprintf(info_buf, sizeof(info_buf), "loop: 0");
+  snprintf(info_buf, sizeof(info_buf), "");
   flow_close();
   float rate = step(pressure);
-  for(byte i = 0; i < 5; i++){
+  for(byte i = 0; i < FINAL_LOOPS; i++){
     float current_rate = step(pressure);
+    flow_res[i] = current_rate;
     char rr[20];
     char pp[20];
     dtostrf(current_rate, 6, 2, rr);
-    dtostrf(0.00512*pressure, 6, 2, pp);
+    dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
 
-    snprintf(info_buf, sizeof(info_buf), "%d P%s R%s", i, pp, rr);
+    snprintf(info_buf, sizeof(info_buf), "Loop %d, P=%s R=%s", i, pp, rr);
     if(!is_equal(current_rate, rate, 5)){
       flow_close();
       return i;
     }
   }
   flow_close();
+  float final_flowrate = 0;
+  for(byte i = 0; i < FINAL_LOOPS; i++){
+    final_flowrate += flow_res[i];
+  }
+  final_flowrate /= FINAL_LOOPS;
+  char rr[20];
+  char pp[20];
+  dtostrf(final_flowrate, 6, 2, rr);
+  dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
+  snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
   return 0;
 }
 
@@ -523,7 +539,7 @@ void dynamic_test(float flow_rate){
       // Serial.println("Pressure is 0");
       // update_monitor("Plug column");
 
-      snprintf(result_buf, sizeof(result_buf), "Plug column");
+      // snprintf(result_buf, sizeof(result_buf), "Plug column");
       // update_monitor();
     }else{
       // 20 loops
@@ -564,7 +580,7 @@ byte fixing_flow(float rate){
     byte begin_press = keep_flow(rate);
     flow_backward();
     byte finish_press = keep_flow(rate);
-    if (is_equal(begin_press, finish_press, 5)){
+    if (is_equal(begin_press, finish_press, 3)){
       // Serial.print("Flowrate:");
       // Serial.println(current_flowrate);
       return finish_press;
@@ -584,7 +600,7 @@ byte keep_flow(float rate){
     // Serial.println("Wait");
     unsigned long last_wait = millis();
     while(is_testing){
-      snprintf(info_buf, sizeof(info_buf), "counter %d", counter);
+      snprintf(info_buf, sizeof(info_buf), "counter %d, AO=%d", counter, flow_pressure);
       // float x = get_flowrate();
       update_monitor();
       read_buttons();
@@ -596,16 +612,18 @@ byte keep_flow(float rate){
 
     // Serial.println("End wait");
     // end wait
-    if (is_equal(current_flowrate, rate, 5)){
+    if (is_equal(current_flowrate, rate, 3)){
       counter++;
     } else {
       counter = 0;
       float k = rate / current_flowrate;
-      if (abs(k-1) > 0.2){
-        if (0.89*k*flow_pressure>255.0){
-          flow_pressure = 255;
+      if ((abs(k-1) > 0.2) && flow_pressure < 250){
+        if (0.89 * k * flow_pressure > 255.0){
+          flow_pressure = 250;
+        } else {
+          flow_pressure *= 0.89*k;
         }
-        flow_pressure *= 0.89*k;
+        // snprintf(info_buf, sizeof(info_buf), "pressure H %d", flow_pressure);
       } else {
         if (current_flowrate > rate){
           if (flow_pressure > 0)
@@ -614,6 +632,7 @@ byte keep_flow(float rate){
           if (flow_pressure < 255) 
             flow_pressure++;
         }
+        // snprintf(info_buf, sizeof(info_buf), "pressure L %d", flow_pressure);
       }
     }
     // char buffer[20];
@@ -628,11 +647,19 @@ byte keep_flow(float rate){
       break;
       // is_testing = false;
     }
-    if ((flow_pressure > 200 || flow_pressure == 0) && current_flowrate < 10){
+    if (flow_pressure > 254){
+      if (current_flowrate < 10){
+        snprintf(result_buf, sizeof(result_buf), "Plug column or compressor");
+      } else {
+        snprintf(result_buf, sizeof(result_buf), "Can't reach that rate!");
+      }
+      char rr[20];
+      char pp[20];
+      dtostrf(current_flowrate, 6, 2, rr);
+      dtostrf(PRESSURE_CORRECTION*flow_pressure, 4, 2, pp);
+      snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
       is_testing = false;
       flow_pressure = 0;
-      // Serial.println("EXIT");
-      snprintf(result_buf, sizeof(result_buf), "Plug column");
       break;
     }
   }
