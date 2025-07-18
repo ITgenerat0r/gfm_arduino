@@ -68,6 +68,7 @@
 
 #define RATE_PRECISION 3
 #define PRESSURE_PRECISION 3
+#define FINAL_RATE_PRECISION 5
 #define FLOW_DURATION 10000//10000
 #define GOOD_COUNT 20//20
 // #define 
@@ -505,7 +506,7 @@ byte check_flow(byte pressure){
     dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
 
     snprintf(info_buf, sizeof(info_buf), "Loop %d, P=%s R=%s", i, pp, rr);
-    if(!is_equal(current_rate, rate, RATE_PRECISION)){
+    if(!is_equal(current_rate, rate, FINAL_RATE_PRECISION)){
       flow_close();
       snprintf(result_buf, sizeof(result_buf), "Bad!");
       return i;
