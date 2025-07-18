@@ -63,15 +63,16 @@
 #define RATE_VOLTAGE_CORRECTION 1.124 // 0.986
 #define RATE_VOLTAGE_OFFSET 1
 
-#define PRESSURE_CORRECTION 0.00662
+#define PRESSURE_CORRECTION 0.00667
 
 
-#define RATE_PRECISION 5
+#define RATE_PRECISION 3
+#define PRESSURE_PRECISION 3
 #define FLOW_DURATION 10000//10000
 #define GOOD_COUNT 20//20
 // #define 
 
-#define FINAL_LOOPS 5
+#define FINAL_LOOPS 20
 
 
 
@@ -504,12 +505,15 @@ byte check_flow(byte pressure){
     dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
 
     snprintf(info_buf, sizeof(info_buf), "Loop %d, P=%s R=%s", i, pp, rr);
-    if(!is_equal(current_rate, rate, 5)){
+    if(!is_equal(current_rate, rate, RATE_PRECISION)){
       flow_close();
+      snprintf(result_buf, sizeof(result_buf), "Bad!");
       return i;
     }
   }
   flow_close();
+
+  snprintf(result_buf, sizeof(result_buf), "Good!");
   float final_flowrate = 0;
   for(byte i = 0; i < FINAL_LOOPS; i++){
     final_flowrate += flow_res[i];
@@ -517,7 +521,7 @@ byte check_flow(byte pressure){
   final_flowrate /= FINAL_LOOPS;
   char rr[20];
   char pp[20];
-  dtostrf(final_flowrate, 6, 2, rr);
+  dtostrf(final_flowrate, 4, 2, rr);
   dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
   snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
   return 0;
@@ -535,33 +539,8 @@ void dynamic_test(float flow_rate){
     // snprintf(info_buf, sizeof(info_buf), "Press %d", pressure);
     // byte pressure = 10;
     // Serial.print("Pressure: "); Serial.println(pressure);
-    if (pressure == 0){
-      // Serial.println("Pressure is 0");
-      // update_monitor("Plug column");
-
-      // snprintf(result_buf, sizeof(result_buf), "Plug column");
-      // update_monitor();
-    }else{
-      // 20 loops
+    if (pressure != 0){
       byte result = check_flow(pressure);
-      // byte result = 0;
-      // Serial.println(result);
-      if(result == 0){
-        // good
-        // Serial.println("Good");
-        // update_monitor2(current_flowrate, current_pressure, "Stabilized");
-        snprintf(result_buf, sizeof(result_buf), "Good!");
-        // update_monitor();
-      } else {
-        // bad
-        // Serial.println("Bad");
-        // char buffer[20];
-        // snprintf(buffer, sizeof(buffer), "Error on %d", result);
-        // const char* cstr = buffer;
-        // update_monitor2(current_flowrate, current_pressure, cstr);
-        snprintf(result_buf, sizeof(result_buf), "Bad!");
-        // update_monitor();
-      }
     }
     is_testing = false;
   }
@@ -580,7 +559,7 @@ byte fixing_flow(float rate){
     byte begin_press = keep_flow(rate);
     flow_backward();
     byte finish_press = keep_flow(rate);
-    if (is_equal(begin_press, finish_press, 3)){
+    if (is_equal(begin_press, finish_press, PRESSURE_PRECISION)){
       // Serial.print("Flowrate:");
       // Serial.println(current_flowrate);
       return finish_press;
@@ -612,7 +591,7 @@ byte keep_flow(float rate){
 
     // Serial.println("End wait");
     // end wait
-    if (is_equal(current_flowrate, rate, 3)){
+    if (is_equal(current_flowrate, rate, RATE_PRECISION)){
       counter++;
     } else {
       counter = 0;
