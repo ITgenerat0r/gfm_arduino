@@ -603,11 +603,12 @@ void dynamic_test(){
         break;
       } else {
         loops_counter = 0;
-        if(current_flowrate < flow_rate_full){
-          static_press++;
-        } else {
-          static_press--;
-        }
+        // if(current_flowrate < flow_rate_full){
+        //   static_press++;
+        // } else {
+        //   static_press--;
+        // }
+        static_press = keep_flow();
         snprintf(result_buf, sizeof(result_buf), "loops: %d/%d", common_loops_counter, loops_counter);
         snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", static_press);
       }
@@ -619,16 +620,18 @@ void dynamic_test(){
     }
 
   }
-  is_testing = false;
-  loops_counter = 0;
   set_flow_pressure(0);
   flow_close();
-  snprintf(result_buf, sizeof(result_buf), "Finished for %d loops.", common_loops_counter-loops_counter);
-  char begin_pp[20];
-  char final_pp[20];
-  dtostrf(PRESSURE_CORRECTION*begin_press, 4, 2, begin_pp);
-  dtostrf(PRESSURE_CORRECTION*static_press, 4, 2, final_pp);
-  snprintf(info_buf, sizeof(info_buf), "P: %s=>%s", begin_pp, final_pp);
+  if(is_testing){
+    snprintf(result_buf, sizeof(result_buf), "Finished for %d loops.", common_loops_counter-loops_counter);
+    char begin_pp[20];
+    char final_pp[20];
+    dtostrf(PRESSURE_CORRECTION*begin_press, 4, 2, begin_pp);
+    dtostrf(PRESSURE_CORRECTION*static_press, 4, 2, final_pp);
+    snprintf(info_buf, sizeof(info_buf), "P: %s=>%s", begin_pp, final_pp);
+  }
+  loops_counter = 0;
+  is_testing = false;
 }
 
 // byte fixing_flow(){
@@ -724,8 +727,8 @@ int keep_flow(){
     // Serial.println(flow_pressure);
     // Serial.print("Counter: "); Serial.println(counter);
     
-    if (flow_pressure > 4094){
-      if (current_flowrate < 10){
+    if (flow_pressure > 4094 && current_millis - last_wait > 8000){
+      if (current_flowrate < 5){
         snprintf(result_buf, sizeof(result_buf), "Plug column or compressor");
       } else {
         snprintf(result_buf, sizeof(result_buf), "Can't reach that rate!");
@@ -737,9 +740,7 @@ int keep_flow(){
       snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
       is_testing = false;
       flow_pressure = 0;
-      if(current_millis - last_wait > 8000){
-        break;
-      }
+      break;
     }
   }
   static_mode = false;
