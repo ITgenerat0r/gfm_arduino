@@ -129,6 +129,9 @@ float current_flowrate = 0;
 float flow_res[FINAL_LOOPS] = { 0.0 };
 
 
+
+
+
 // read_buttons()
 unsigned long last_time_pressed = 0;
 bool is_skip = false;
@@ -147,6 +150,7 @@ unsigned long last_switch_millis = 0;
 
 bool md_full = true; // mode
 bool static_mode = false;
+bool is_flow_ready = false;
 bool dynamic_mode = false;
 char result_buf[25];
 char info_buf[25];
@@ -324,14 +328,14 @@ void set_new_flow_pressure(int value){
 }
 
 void set_new_flow_rate(int value){
-  // if (value < 50){
-  //   value = 50;
-  // } else if (value > 160){
-  //   value = 160;
-  // }
-  // flow_rate = value;
+  
+
   
   flow_rate_full += value;
+  // fix upper step rate
+  if(flow_rate_full == 140) flow_rate_full = 150;
+  if(flow_rate_full == 130) flow_rate_full = 120;
+  // check borders
   if (flow_rate_full > 150) flow_rate_full = 150;
   if (flow_rate_full < 60) flow_rate_full = 60;
   
@@ -364,21 +368,31 @@ void read_buttons(){
     }
     is_skip = true;
     // is_testing = false;
-    if(static_mode){
+    if(dynamic_mode == false){
       if (btn_up_state == true){
-        set_new_flow_rate(10);
+        set_new_flow_rate(20);
       }
       if (btn_down_state == true){
-        set_new_flow_rate(-10);
+        set_new_flow_rate(-20);
       }
     }
     
-    if (btn_state == true && is_testing == true){
-      is_testing = false;
+    if (btn_state == true){
+      if(static_mode == true){
+        is_testing = false;
+      } else {
+        static_test();
+      }
     }
     if (btn_mode_state == true){
-      is_testing = false;
-      dynamic_mode = true;
+      if(dynamic_mode == true){
+        is_testing = false;
+      } else {
+        if(is_flow_ready == true){
+          dynamic_test();
+        }
+      }
+      
     }
   } else {
     last_time_pressed = millis();
@@ -576,19 +590,32 @@ byte check_flow(byte pressure){
   return 0;
 }
 
+void static_test(){
+  static_mode = true;
+  is_testing = true;
+  flow_forward();
+  int static_press = keep_flow(false);
+  static_mode = false;
+  snprintf(result_buf, sizeof(result_buf), "Waiting mode");
+  snprintf(info_buf, sizeof(info_buf), "");
+  set_flow_pressure(0);
+  flow_close();
+}
+
 
 void dynamic_test(){
-  dynamic_mode = false;
+  dynamic_mode = true;
   int common_loops_counter = 0;
   byte loops_counter = 0;
   // Serial.println("dynamic_test()");
   snprintf(result_buf, sizeof(result_buf), "Testing...");
   // flow_close();
-  flow_pressure = 30+flow_rate_full*2;
+  // flow_pressure = 30+flow_rate_full*2;
   is_testing = true;
   flow_forward();
-  int static_press = keep_flow();
-  int begin_press = static_press;
+  // int static_press = keep_flow();
+  int begin_press = flow_pressure;
+  int static_press = flow_pressure;
   while (is_testing){
     set_flow_pressure(static_press);
     flow_backward();
@@ -626,12 +653,13 @@ void dynamic_test(){
     snprintf(result_buf, sizeof(result_buf), "Finished for %d loops.", common_loops_counter-loops_counter);
     char begin_pp[20];
     char final_pp[20];
-    dtostrf(PRESSURE_CORRECTION*begin_press, 4, 2, begin_pp);
-    dtostrf(PRESSURE_CORRECTION*static_press, 4, 2, final_pp);
+    dtostrf(PRESSURE_CORRECTION*begin_press, 4, 3, begin_pp);
+    dtostrf(PRESSURE_CORRECTION*static_press, 4, 3, final_pp);
     snprintf(info_buf, sizeof(info_buf), "P: %s=>%s", begin_pp, final_pp);
   }
   loops_counter = 0;
   is_testing = false;
+  dynamic_mode = false;
 }
 
 // byte fixing_flow(){
@@ -653,9 +681,12 @@ void dynamic_test(){
 //   }
 // }
 
-
 int keep_flow(){
-  static_mode = true;
+  return keep_flow(true);
+}
+
+
+int keep_flow(bool done_when_ready){
   unsigned long last_wait = millis();
   unsigned long last_wait_k = millis();
   unsigned long last_wait_i = millis();
@@ -667,14 +698,25 @@ int keep_flow(){
     unsigned long current_millis = millis();
     if (current_millis - last_wait > 10000) {
       // snprintf(result_buf, sizeof(result_buf), "10sec");
-      break;
+      is_flow_ready = true;
+      if(done_when_ready){
+        break;
+      }
+    } else {
+      is_flow_ready = false;
     }
     set_flow_pressure(flow_pressure);
 
     // wait
     // Serial.println("Wait");
-   
-    snprintf(info_buf, sizeof(info_buf), "static, tw=%d, AO=%d", toward, flow_pressure);
+    
+    if(static_mode){
+      snprintf(result_buf, sizeof(result_buf), "is ready: %d. %d,%ds", is_flow_ready, (current_millis-last_wait)/1000, ((current_millis-last_wait)%1000)/100);
+      snprintf(info_buf, sizeof(info_buf), "static, tw=%d, AO=%d", toward, flow_pressure);
+    } else if (dynamic_mode) {
+      snprintf(info_buf, sizeof(info_buf), "dynamic, tw=%d, AO=%d", toward, flow_pressure);
+    }
+    
     // float x = get_flowrate();
     update_monitor();
     read_buttons();
@@ -740,10 +782,12 @@ int keep_flow(){
       snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
       is_testing = false;
       flow_pressure = 0;
-      break;
+      if(done_when_ready){
+        break;
+      }
     }
   }
-  static_mode = false;
+  is_flow_ready = false;
   return flow_pressure;
 }
 
@@ -805,7 +849,7 @@ void setup() {
 //  itoa(x, buffer, 10);
   oled.clear();
   oled.drawRow(1, "Starting...");
-  oled.drawRow(2, "Version 2.3");
+  oled.drawRow(2, "Version 2.4");
   oled.update();
 
 
@@ -887,18 +931,16 @@ void loop() {
     // lcd_write(ss);
   // }
 
-  bool btn_state = !digitalRead(BTN_START_PIN);
-  // Serial.println(btn_state);
-  if(btn_state==true){
-    // leds_state = testing();
-    dynamic_mode = true;
-    while (dynamic_mode){
-      dynamic_test();
-    }
+  // bool btn_state = !digitalRead(BTN_START_PIN);
+  // // Serial.println(btn_state);
+  // if(btn_state==true){
+  //   // leds_state = testing();
+  //   // dynamic_mode = true;
+  //   static_test();
     
     
-    // Serial.print("----");
-  }
+  //   // Serial.print("----");
+  // }
 
   // current_flowrate = get_flowrate();
 
