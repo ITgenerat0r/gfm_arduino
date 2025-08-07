@@ -98,6 +98,7 @@ OLEDHelper oled(u8g2);
 bool logs = false;
 
 bool is_testing = false;
+bool is_d_testing = false;
 
 
 // blink_led()
@@ -386,7 +387,7 @@ void read_buttons(){
     }
     if (btn_mode_state == true){
       if(dynamic_mode == true){
-        is_testing = false;
+        is_d_testing = false;
       } else {
         if(is_flow_ready == true){
           dynamic_test();
@@ -523,20 +524,20 @@ void update_monitor(){
 // }
 
 
-float step(int p){
-  set_flow_pressure(p);
-  flow_forward();
-  wait(FLOW_DURATION);
-  flow_backward();
-  wait(FLOW_DURATION);
-  return get_flowrate();
-}
+// float step(int p){
+//   set_flow_pressure(p);
+//   flow_forward();
+//   wait(FLOW_DURATION);
+//   flow_backward();
+//   wait(FLOW_DURATION);
+//   return get_flowrate();
+// }
 
 
 void wait(int d){
   last_switch_millis = millis();
   // unsigned long last_output = millis();
-  while(is_testing){
+  while(is_d_testing){
     update_monitor();
     read_buttons();
     // lcd_write(get_flowrate());
@@ -554,41 +555,41 @@ void wait(int d){
 
 
 
-byte check_flow(byte pressure){
-  snprintf(result_buf, sizeof(result_buf), "checking...");
-  snprintf(info_buf, sizeof(info_buf), "");
-  flow_close();
-  float rate = step(pressure);
-  for(byte i = 0; i < FINAL_LOOPS; i++){
-    float current_rate = step(pressure);
-    flow_res[i] = current_rate;
-    char rr[20];
-    char pp[20];
-    dtostrf(current_rate, 6, 2, rr);
-    dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
+// byte check_flow(byte pressure){
+//   snprintf(result_buf, sizeof(result_buf), "checking...");
+//   snprintf(info_buf, sizeof(info_buf), "");
+//   flow_close();
+//   float rate = step(pressure);
+//   for(byte i = 0; i < FINAL_LOOPS; i++){
+//     float current_rate = step(pressure);
+//     flow_res[i] = current_rate;
+//     char rr[20];
+//     char pp[20];
+//     dtostrf(current_rate, 6, 2, rr);
+//     dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
 
-    snprintf(info_buf, sizeof(info_buf), "Loop %d, P=%s R=%s", i, pp, rr);
-    if(!is_equal(current_rate, rate, FINAL_RATE_PRECISION)){
-      flow_close();
-      snprintf(result_buf, sizeof(result_buf), "Bad!");
-      return i;
-    }
-  }
-  flow_close();
+//     snprintf(info_buf, sizeof(info_buf), "Loop %d, P=%s R=%s", i, pp, rr);
+//     if(!is_equal(current_rate, rate, FINAL_RATE_PRECISION)){
+//       flow_close();
+//       snprintf(result_buf, sizeof(result_buf), "Bad!");
+//       return i;
+//     }
+//   }
+//   flow_close();
 
-  snprintf(result_buf, sizeof(result_buf), "Good!");
-  float final_flowrate = 0;
-  for(byte i = 0; i < FINAL_LOOPS; i++){
-    final_flowrate += flow_res[i];
-  }
-  final_flowrate /= FINAL_LOOPS;
-  char rr[20];
-  char pp[20];
-  dtostrf(final_flowrate, 4, 2, rr);
-  dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
-  snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
-  return 0;
-}
+//   snprintf(result_buf, sizeof(result_buf), "Good!");
+//   float final_flowrate = 0;
+//   for(byte i = 0; i < FINAL_LOOPS; i++){
+//     final_flowrate += flow_res[i];
+//   }
+//   final_flowrate /= FINAL_LOOPS;
+//   char rr[20];
+//   char pp[20];
+//   dtostrf(final_flowrate, 4, 2, rr);
+//   dtostrf(PRESSURE_CORRECTION*pressure, 4, 2, pp);
+//   snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
+//   return 0;
+// }
 
 void static_test(){
   static_mode = true;
@@ -608,21 +609,21 @@ void dynamic_test(){
   int common_loops_counter = 0;
   byte loops_counter = 0;
   // Serial.println("dynamic_test()");
-  snprintf(result_buf, sizeof(result_buf), "Testing...");
+  snprintf(result_buf, sizeof(result_buf), "Switch to dynamic...");
   // flow_close();
   // flow_pressure = 30+flow_rate_full*2;
-  is_testing = true;
+  is_d_testing = true;
   flow_forward();
   // int static_press = keep_flow();
   int begin_press = flow_pressure;
   int static_press = flow_pressure;
-  while (is_testing){
+  while (is_d_testing){
     set_flow_pressure(static_press);
     flow_backward();
     wait(10000);
     flow_forward();
     common_loops_counter++;
-    while(is_testing){
+    while(is_d_testing){
       wait(10000);
       get_flowrate();
       if(is_equal(current_flowrate, flow_rate_full, FINAL_RATE_PRECISION) == true){
@@ -649,7 +650,7 @@ void dynamic_test(){
   }
   set_flow_pressure(0);
   flow_close();
-  if(is_testing){
+  if(is_d_testing){
     snprintf(result_buf, sizeof(result_buf), "Finished for %d loops.", common_loops_counter-loops_counter);
     char begin_pp[20];
     char final_pp[20];
@@ -658,7 +659,7 @@ void dynamic_test(){
     snprintf(info_buf, sizeof(info_buf), "P: %s=>%s", begin_pp, final_pp);
   }
   loops_counter = 0;
-  is_testing = false;
+  is_d_testing = false;
   dynamic_mode = false;
 }
 
@@ -710,7 +711,7 @@ int keep_flow(bool done_when_ready){
     // wait
     // Serial.println("Wait");
     
-    if(static_mode){
+    if(dynamic_mode == false){
       snprintf(result_buf, sizeof(result_buf), "is ready: %d. %d,%ds", is_flow_ready, (current_millis-last_wait)/1000, ((current_millis-last_wait)%1000)/100);
       snprintf(info_buf, sizeof(info_buf), "static, tw=%d, AO=%d", toward, flow_pressure);
     } else if (dynamic_mode) {
@@ -849,7 +850,7 @@ void setup() {
 //  itoa(x, buffer, 10);
   oled.clear();
   oled.drawRow(1, "Starting...");
-  oled.drawRow(2, "Version 2.4");
+  oled.drawRow(2, "Version 2.5");
   oled.update();
 
 
