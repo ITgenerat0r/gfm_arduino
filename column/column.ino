@@ -379,6 +379,7 @@ void read_buttons(){
     }
     
     if (btn_state == true){
+      dynamic_mode = false;
       if(static_mode == true){
         is_testing = false;
       } else {
@@ -386,8 +387,9 @@ void read_buttons(){
       }
     }
     if (btn_mode_state == true){
-      if(dynamic_mode == true){
+      if(dynamic_mode == true && is_d_testing){
         is_d_testing = false;
+        dynamic_mode = false;
       } else {
         if(is_flow_ready == true){
           dynamic_test();
@@ -609,7 +611,8 @@ void dynamic_test(){
   int common_loops_counter = 0;
   byte loops_counter = 0;
   // Serial.println("dynamic_test()");
-  snprintf(result_buf, sizeof(result_buf), "Switch to dynamic...");
+  snprintf(result_buf, sizeof(result_buf), "Dynamic mode.");
+  snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", flow_pressure);
   // flow_close();
   // flow_pressure = 30+flow_rate_full*2;
   is_d_testing = true;
@@ -648,8 +651,8 @@ void dynamic_test(){
     }
 
   }
-  set_flow_pressure(0);
-  flow_close();
+  // set_flow_pressure(0);
+  // flow_close();
   if(is_d_testing){
     snprintf(result_buf, sizeof(result_buf), "Finished for %d loops.", common_loops_counter-loops_counter);
     char begin_pp[20];
@@ -660,7 +663,7 @@ void dynamic_test(){
   }
   loops_counter = 0;
   is_d_testing = false;
-  dynamic_mode = false;
+  // dynamic_mode = false;
 }
 
 // byte fixing_flow(){
@@ -712,9 +715,9 @@ int keep_flow(bool done_when_ready){
     // Serial.println("Wait");
     
     if(dynamic_mode == false){
-      snprintf(result_buf, sizeof(result_buf), "is ready: %d. %d,%ds", is_flow_ready, (current_millis-last_wait)/1000, ((current_millis-last_wait)%1000)/100);
+      snprintf(result_buf, sizeof(result_buf), "is ready: %d.   %d,%ds", is_flow_ready, (current_millis-last_wait)/1000, ((current_millis-last_wait)%1000)/100);
       snprintf(info_buf, sizeof(info_buf), "static, tw=%d, AO=%d", toward, flow_pressure);
-    } else if (dynamic_mode) {
+    } else if (dynamic_mode && is_d_testing) {
       snprintf(info_buf, sizeof(info_buf), "dynamic, tw=%d, AO=%d", toward, flow_pressure);
     }
     
@@ -727,6 +730,9 @@ int keep_flow(bool done_when_ready){
 
     // Serial.println("End wait");
     // end wait
+    if(abs(flow_rate_full/current_flowrate-1)>0.1){
+      slow_i = false;
+    }
     if (is_equal(current_flowrate, flow_rate_full, RATE_PRECISION, toward)){
       toward = 0;
       slow_i = true;
