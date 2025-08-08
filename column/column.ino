@@ -66,9 +66,9 @@
 #define PRESSURE_CORRECTION 0.000685156
 
 
-#define RATE_PRECISION 1
-#define PRESSURE_PRECISION 1
-#define FINAL_RATE_PRECISION 1
+#define RATE_PRECISION 3
+#define PRESSURE_PRECISION 3
+#define FINAL_RATE_PRECISION 3
 #define FLOW_DURATION 10000//10000
 #define GOOD_COUNT 20//20
 // #define 
@@ -142,6 +142,7 @@ bool is_skip = false;
 // byte start_pressure = 10;
 // byte finish_pressure = 0;
 bool flow_toward = false;
+int slow_i_delay = 1000;
 
 
 // wait()
@@ -376,6 +377,16 @@ void read_buttons(){
       if (btn_down_state == true){
         set_new_flow_rate(-20);
       }
+    } 
+    if (is_d_testing){
+      if(btn_up_state == true){
+        flow_pressure++;
+      } 
+      if (btn_down_state == true){
+        flow_pressure--;
+      }
+      set_flow_pressure(flow_pressure);
+      snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", flow_pressure);
     }
     
     if (btn_state == true){
@@ -608,6 +619,7 @@ void static_test(){
 
 void dynamic_test(){
   dynamic_mode = true;
+  slow_i_delay = 1000;
   int common_loops_counter = 0;
   byte loops_counter = 0;
   // Serial.println("dynamic_test()");
@@ -621,10 +633,11 @@ void dynamic_test(){
   int begin_press = flow_pressure;
   int static_press = flow_pressure;
   while (is_d_testing){
+    static_press = flow_pressure;
     set_flow_pressure(static_press);
-    flow_backward();
+    // flow_backward();
     wait(10000);
-    flow_forward();
+    // flow_forward();
     common_loops_counter++;
     while(is_d_testing){
       wait(10000);
@@ -639,16 +652,16 @@ void dynamic_test(){
         // } else {
         //   static_press--;
         // }
-        static_press = keep_flow();
+        // static_press = keep_flow();
         snprintf(result_buf, sizeof(result_buf), "loops: %d/%d", common_loops_counter, loops_counter);
         snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", static_press);
       }
     }
     snprintf(result_buf, sizeof(result_buf), "loops: %d/%d", common_loops_counter, loops_counter);
     snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", static_press);
-    if(loops_counter>19){
-      break;
-    }
+    // if(loops_counter>19){
+    //   break;
+    // }
 
   }
   // set_flow_pressure(0);
@@ -711,6 +724,13 @@ int keep_flow(bool done_when_ready){
     }
     set_flow_pressure(flow_pressure);
 
+    if(current_millis - last_wait > slow_i_delay){
+      if (current_millis - last_wait > 10000){
+        slow_i_delay = 10000;
+      } else {
+        slow_i_delay = current_millis - last_wait;
+      }
+    }
     // wait
     // Serial.println("Wait");
     
@@ -718,7 +738,7 @@ int keep_flow(bool done_when_ready){
       snprintf(result_buf, sizeof(result_buf), "is ready: %d.   %d,%ds", is_flow_ready, (current_millis-last_wait)/1000, ((current_millis-last_wait)%1000)/100);
       snprintf(info_buf, sizeof(info_buf), "static, tw=%d, AO=%d", toward, flow_pressure);
     } else if (dynamic_mode && is_d_testing) {
-      snprintf(info_buf, sizeof(info_buf), "dynamic, tw=%d, AO=%d", toward, flow_pressure);
+      snprintf(info_buf, sizeof(info_buf), "dyna..., tw=%d, AO=%d", toward, flow_pressure);
     }
     
     // float x = get_flowrate();
@@ -744,7 +764,7 @@ int keep_flow(bool done_when_ready){
       } else {
         toward = 1;
       }
-      if ((abs(k-1) > 0.2) && flow_pressure < 4090 && current_millis - last_wait_k > 1000){
+      if ((abs(k-1) > 0.2) && flow_pressure < 4090 && current_millis - last_wait_k > 3000){
         last_wait_k = millis();
         if (0.9 * k * flow_pressure > 4095.0){
           flow_pressure = 4095;
@@ -753,16 +773,26 @@ int keep_flow(bool done_when_ready){
         }
         // snprintf(info_buf, sizeof(info_buf), "pressure H %d", flow_pressure);
       } else {
-        if(slow_i && current_millis - last_wait_i < 1000){
+        if(slow_i && current_millis - last_wait_i < slow_i_delay){
           continue;
         }
         last_wait_i = current_millis;
         if (current_flowrate > flow_rate_full){
-          if (flow_pressure > 0)
-            flow_pressure--;
+          if (flow_pressure > 0){
+            if (current_flowrate - flow_rate_full > 10){
+              flow_pressure -= 10;
+            } else {
+              flow_pressure--;
+            }
+          }
         } else {
-          if (flow_pressure < 4095) 
-            flow_pressure++;
+          if (flow_pressure < 4095){
+            if(flow_rate_full - current_flowrate > 10){
+              flow_pressure += 10;
+            } else {
+              flow_pressure++;
+            }
+          }
         }
         // snprintf(info_buf, sizeof(info_buf), "pressure L %d", flow_pressure);
       }
@@ -856,7 +886,7 @@ void setup() {
 //  itoa(x, buffer, 10);
   oled.clear();
   oled.drawRow(1, "Starting...");
-  oled.drawRow(2, "Version 2.5");
+  oled.drawRow(2, "Version 2.6");
   oled.update();
 
 
