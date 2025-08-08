@@ -373,21 +373,23 @@ void read_buttons(){
     if(dynamic_mode == false){
       if (btn_up_state == true){
         set_new_flow_rate(20);
+        slow_i_delay = 1000;
       }
       if (btn_down_state == true){
         set_new_flow_rate(-20);
+        slow_i_delay = 1000;
       }
     } 
-    if (is_d_testing){
-      if(btn_up_state == true){
-        flow_pressure++;
-      } 
-      if (btn_down_state == true){
-        flow_pressure--;
-      }
-      set_flow_pressure(flow_pressure);
-      snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", flow_pressure);
-    }
+    // if (is_d_testing){
+    //   if(btn_up_state == true){
+    //     flow_pressure++;
+    //   } 
+    //   if (btn_down_state == true){
+    //     flow_pressure--;
+    //   }
+    //   set_flow_pressure(flow_pressure);
+    //   snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", flow_pressure);
+    // }
     
     if (btn_state == true){
       dynamic_mode = false;
@@ -633,11 +635,10 @@ void dynamic_test(){
   int begin_press = flow_pressure;
   int static_press = flow_pressure;
   while (is_d_testing){
-    static_press = flow_pressure;
     set_flow_pressure(static_press);
-    // flow_backward();
+    flow_backward();
     wait(10000);
-    // flow_forward();
+    flow_forward();
     common_loops_counter++;
     while(is_d_testing){
       wait(10000);
@@ -652,16 +653,16 @@ void dynamic_test(){
         // } else {
         //   static_press--;
         // }
-        // static_press = keep_flow();
+        static_press = keep_flow();
         snprintf(result_buf, sizeof(result_buf), "loops: %d/%d", common_loops_counter, loops_counter);
         snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", static_press);
       }
     }
     snprintf(result_buf, sizeof(result_buf), "loops: %d/%d", common_loops_counter, loops_counter);
     snprintf(info_buf, sizeof(info_buf), "dynamic, AO=%d", static_press);
-    // if(loops_counter>19){
-    //   break;
-    // }
+    if(loops_counter>19){
+      break;
+    }
 
   }
   // set_flow_pressure(0);
