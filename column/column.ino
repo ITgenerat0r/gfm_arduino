@@ -10,6 +10,9 @@
 
 #include <OLEDHelper.h>
 
+#include "pid.h"
+#include <stdio.h>
+
 
 // digital
 #define VALVE_1_PIN PA8
@@ -65,12 +68,15 @@
 
 #define PRESSURE_CORRECTION 0.000685156
 
-
+// other
 #define RATE_PRECISION 3
 #define PRESSURE_PRECISION 3
-#define FINAL_RATE_PRECISION 3
+#define FINAL_RATE_PRECISION 5
 #define FLOW_DURATION 10000//10000
 #define GOOD_COUNT 20//20
+#define SLOW_I_DELAY_BEFORE_CHANGE 6000
+#define MIN_SLOW_I_RANGE 2
+#define MAX_SLOW_I_RANGE 10
 // #define 
 
 #define FINAL_LOOPS 20
@@ -143,6 +149,7 @@ bool is_skip = false;
 // byte finish_pressure = 0;
 bool flow_toward = false;
 int slow_i_delay = 1000;
+byte slow_i_range = 5;
 
 
 // wait()
@@ -552,6 +559,7 @@ void update_monitor(){
 void wait(int d){
   last_switch_millis = millis();
   // unsigned long last_output = millis();
+  // snprintf(info_buf, sizeof(info_buf), "wait... ");
   while(is_d_testing){
     update_monitor();
     read_buttons();
@@ -560,6 +568,28 @@ void wait(int d){
     if(current_millis - last_switch_millis > d){
       break;
     }
+    // snprintf(info_buf, sizeof(info_buf), "wait... %d", current_millis - last_switch_millis);
+    // if(current_millis - last_output > 5000){
+    //   last_output = millis();
+    //   update_monitor();
+    // }
+  }
+  
+}
+
+void wait_t(int d){
+  last_switch_millis = millis();
+  // unsigned long last_output = millis();
+  // snprintf(info_buf, sizeof(info_buf), "wait... ");
+  while(is_testing){
+    update_monitor();
+    read_buttons();
+    // lcd_write(get_flowrate());
+    unsigned long current_millis = millis();
+    if(current_millis - last_switch_millis > d){
+      break;
+    }
+    // snprintf(info_buf, sizeof(info_buf), "wait... %d", current_millis - last_switch_millis);
     // if(current_millis - last_output > 5000){
     //   last_output = millis();
     //   update_monitor();
@@ -621,7 +651,7 @@ void static_test(){
 
 void dynamic_test(){
   dynamic_mode = true;
-  slow_i_delay = 1000;
+  slow_i_delay = 10;
   int common_loops_counter = 0;
   byte loops_counter = 0;
   // Serial.println("dynamic_test()");
@@ -699,13 +729,159 @@ void dynamic_test(){
 //   }
 // }
 
+int keep_flow_san(bool done_when_ready){
+  PID_Controller pid;
+  PID_Init(&pid, 0.01f, 0.0f, 0.0f, 0.0f, 4096.0f); // Kp, Ki, Kd, min, max
+  pid.setpoint = flow_rate_full; // Заданное значение
+  while (1) {
+    float feedback = get_flowrate(); // текущее значение (например, с датчика)
+    flow_pressure = PID_Compute(&pid, feedback);
+
+    set_flow_pressure(flow_pressure);
+  }
+}
+
+
+int keep_flow_ni(bool done_when_ready){
+  unsigned long last_wait = millis();
+  int step = 1;
+  int dl = 1; // delay
+
+  byte toward = 2;
+
+  float last_flowrate = get_flowrate();
+
+  PID_Controller pid;
+  PID_Init(&pid, 0.001f, 0.25f, 0.02f, 0.0f, 4096.0f); // Kp, Ki, Kd, min, max
+  // pid.setpoint = flow_rate_full; // Заданное значение
+
+  while(is_testing){
+    pid.setpoint = flow_rate_full; // Заданное значение
+    unsigned long current_millis = millis();
+    if (current_millis - last_wait > 10000) {
+      // snprintf(result_buf, sizeof(result_buf), "10sec");
+      is_flow_ready = true;
+      if(done_when_ready){
+        break;
+      }
+    } else {
+      is_flow_ready = false;
+    }
+
+    if(dynamic_mode == false){
+      snprintf(result_buf, sizeof(result_buf), "is r: %d.   %d,%ds, %d/%d.", is_flow_ready, (current_millis-last_wait)/1000, ((current_millis-last_wait)%1000)/100, step, dl);
+      snprintf(info_buf, sizeof(info_buf), "static, tw=%d, AO=%d", toward, flow_pressure);
+    } else if (dynamic_mode && is_d_testing) {
+      snprintf(info_buf, sizeof(info_buf), "dyna..., tw=%d, AO=%d", toward, flow_pressure);
+    }
+  
+
+
+
+    
+    set_flow_pressure(flow_pressure);
+    wait_t(dl);
+    update_monitor();
+    read_buttons();
+
+    
+    if (is_equal(current_flowrate, flow_rate_full, RATE_PRECISION, toward)){
+      toward = 0;
+    } else {
+      last_wait = current_millis;
+      float s = abs(flow_rate_full/current_flowrate-1);
+      if (s < 0.03){
+        step = 1;
+        dl = 5000;
+      } else if (s < 0.05){
+        step = 1;
+        dl = 1000;
+      } else if (s < 0.1){
+        step = 1;
+        dl = 500;
+      } else if (s < 0.2){
+        step = 1;
+        dl = 100;
+      } else if(s < 0.5){
+        step = 1;
+        dl = 1;
+      } else {
+        dl = 0;
+        step = 10;
+        // float feedback = get_flowrate(); // текущее значение (например, с датчика)
+        // flow_pressure = PID_Compute(&pid, feedback);
+        // set_flow_pressure(flow_pressure);
+      }
+      
+      float k = flow_rate_full / current_flowrate;
+      if (1){
+        if(k > 1){
+          toward = 2;
+          flow_pressure += step;
+        }else{
+          toward = 1;
+          flow_pressure -= step;
+        }
+      } else {
+        
+      }
+      
+    }
+    
+
+
+
+
+
+    if (flow_pressure > 4094 && current_millis - last_wait > 8000){
+      if (current_flowrate < 5){
+        snprintf(result_buf, sizeof(result_buf), "Plug column or compressor");
+      } else {
+        snprintf(result_buf, sizeof(result_buf), "Can't reach that rate!");
+      }
+      char rr[20];
+      char pp[20];
+      dtostrf(current_flowrate, 6, 2, rr);
+      dtostrf(PRESSURE_CORRECTION*flow_pressure, 4, 2, pp);
+      snprintf(info_buf, sizeof(info_buf), "P=%s R=%s", pp, rr);
+      is_testing = false;
+      flow_pressure = 0;
+      if(done_when_ready){
+        break;
+      }
+    }
+
+
+  }
+  is_flow_ready = false;
+  return flow_pressure;
+}
+
+
+
+void wait_stable_flow(){
+  float last_f = get_flowrate();
+  while(true){
+    wait(3000);
+    float current_f = get_flowrate();
+    if(abs(current_f/last_f-1) < 0.03){
+      return;
+    }
+    last_f = current_f;
+  }
+  
+}
+
+
 int keep_flow(){
   return keep_flow(true);
 }
 
 
 int keep_flow(bool done_when_ready){
+  // return keep_flow_ni(done_when_ready);
   unsigned long last_wait = millis();
+  unsigned long unstable_timer = millis();
   unsigned long last_wait_k = millis();
   unsigned long last_wait_i = millis();
   bool slow_i = false;
@@ -724,12 +900,13 @@ int keep_flow(bool done_when_ready){
       is_flow_ready = false;
     }
     set_flow_pressure(flow_pressure);
+    // wait_stable_flow();
 
     if(current_millis - last_wait > slow_i_delay){
-      if (current_millis - last_wait > 10000){
-        slow_i_delay = 10000;
+      if (current_millis - last_wait > 1000){
+        slow_i_delay = 1000;
       } else {
-        slow_i_delay = current_millis - last_wait;
+        slow_i_delay = (current_millis - last_wait)%1000;
       }
     }
     // wait
@@ -751,14 +928,17 @@ int keep_flow(bool done_when_ready){
 
     // Serial.println("End wait");
     // end wait
-    if(abs(flow_rate_full/current_flowrate-1)>0.1){
+    // if(abs(flow_rate_full/current_flowrate-1)>0.05 || abs(flow_rate_full-current_flowrate>5)){
+    //   slow_i = false;
+    // }
+    if(abs(flow_rate_full-current_flowrate>slow_i_range)){
       slow_i = false;
     }
     if (is_equal(current_flowrate, flow_rate_full, RATE_PRECISION, toward)){
       toward = 0;
       slow_i = true;
     } else {
-      last_wait = current_millis;
+      // last_wait = current_millis;
       float k = flow_rate_full / current_flowrate;
       if (k >= 1){
         toward = 2;
@@ -798,6 +978,24 @@ int keep_flow(bool done_when_ready){
         // snprintf(info_buf, sizeof(info_buf), "pressure L %d", flow_pressure);
       }
     }
+    if(is_equal(current_flowrate, flow_rate_full, FINAL_RATE_PRECISION)){
+      unstable_timer = millis();
+    } else {
+      last_wait = current_millis;
+      if(current_millis-unstable_timer>SLOW_I_DELAY_BEFORE_CHANGE){
+        if(slow_i){
+          slow_i_range--;
+        } else {
+          slow_i_range++;
+        }
+        if(slow_i_range > MAX_SLOW_I_RANGE){
+          slow_i_range = MAX_SLOW_I_RANGE;
+        }
+        if(slow_i_range < MIN_SLOW_I_RANGE){
+          slow_i_range = MIN_SLOW_I_RANGE;
+        }
+      }
+    }
     // char buffer[20];
     // snprintf(buffer, sizeof(buffer), "Counter %%", counter);
     // const char* cstr = buffer;
@@ -807,7 +1005,7 @@ int keep_flow(bool done_when_ready){
     // Serial.println(flow_pressure);
     // Serial.print("Counter: "); Serial.println(counter);
     
-    if (flow_pressure > 4094 && current_millis - last_wait > 8000){
+    if (flow_pressure > 4094 && current_millis - last_wait > 10000){
       if (current_flowrate < 5){
         snprintf(result_buf, sizeof(result_buf), "Plug column or compressor");
       } else {
@@ -887,7 +1085,7 @@ void setup() {
 //  itoa(x, buffer, 10);
   oled.clear();
   oled.drawRow(1, "Starting...");
-  oled.drawRow(2, "Version 2.6");
+  oled.drawRow(2, "Version 2.7");
   oled.update();
 
 
