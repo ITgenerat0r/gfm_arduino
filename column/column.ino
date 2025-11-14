@@ -1094,10 +1094,10 @@ void setup() {
   
 
 
-  digitalWrite(GREEN_LED_PIN, HIGH);
-  delay(200);
-  digitalWrite(RED_LED_PIN, HIGH);
-  delay(500);
+  // digitalWrite(GREEN_LED_PIN, HIGH);
+  // delay(200);
+  // digitalWrite(RED_LED_PIN, HIGH);
+  // delay(500);
   digitalWrite(VALVE_1_PIN, HIGH);
   delay(1000);
   digitalWrite(VALVE_1_PIN, LOW);
