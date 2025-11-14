@@ -354,10 +354,10 @@ void set_new_flow_rate(int value){
 
 void read_buttons(){
   
-  bool btn_state = !digitalRead(BTN_START_PIN);
-  bool btn_up_state = !digitalRead(BTN_UP_PIN);
-  bool btn_down_state = !digitalRead(BTN_DOWN_PIN);
-  bool btn_mode_state = !digitalRead(BTN_MODE_PIN);
+  bool btn_state = digitalRead(BTN_START_PIN);
+  bool btn_up_state = digitalRead(BTN_UP_PIN);
+  bool btn_down_state = digitalRead(BTN_DOWN_PIN);
+  bool btn_mode_state = digitalRead(BTN_MODE_PIN);
   if(btn_state | btn_up_state | btn_down_state | btn_mode_state == true){
     unsigned long current_time = millis();
 
