@@ -15,8 +15,8 @@
 
 
 // digital
-#define VALVE_1_PIN PA8
-#define VALVE_2_PIN PA15
+#define VALVE_1_PIN PA15
+#define VALVE_2_PIN PA8
 #define RED_LED_PIN PB3
 #define GREEN_LED_PIN PB4
 #define GEAR_PIN PA1
@@ -63,7 +63,7 @@
 #define LED_OFF_DELAY 100
 #define LED_LONG_DELAY 1000
 
-#define RATE_VOLTAGE_CORRECTION 1.124 // 0.986
+#define RATE_VOLTAGE_CORRECTION 0.929 // 0.986
 #define RATE_VOLTAGE_OFFSET 1
 
 #define PRESSURE_CORRECTION 0.000685156
@@ -235,6 +235,7 @@ float get_flowrate(){
 
 
   float u = 5.0 * x * (3.3 / 4095.0) * RATE_VOLTAGE_CORRECTION;
+  // float rate = u;
   float rate = PFMV505_flow(u, RATE_VOLTAGE_OFFSET);
 
   current_flowrate = alpha * rate + (1 - alpha) * current_flowrate;
